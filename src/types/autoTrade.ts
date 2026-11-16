@@ -21,12 +21,19 @@ export interface AuctionInspection {
   bodyNotes: string[];
 }
 
+export type PortTrackingStage =
+  | 'In Transit'
+  | 'At Port'
+  | 'Customs Clearing'
+  | 'Ready for Pickup';
+
 export interface ShippingTransitInfo {
   dealType: ListingMode;
   destinationPortId: string;
   destinationPortLabel: string;
   vesselName: string;
   arrivalStatus: string;
+  trackingStage?: PortTrackingStage;
   etaDate?: string;
   fullCifUsd: number;
   priorDepositUsd: number;

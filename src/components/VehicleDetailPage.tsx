@@ -16,6 +16,7 @@ import type { AutoCurrency, ExportVehicle } from '../types/autoTrade.ts';
 import type { LockedCifQuote } from './CifCalculatorSection';
 import { FreightCalculatorWidget } from './FreightCalculatorWidget';
 import type { AppRoute } from './Navbar';
+import { PortTrackingProgress } from './PortTrackingProgress';
 import { ResilientImage } from './ResilientImage';
 import { VehicleCard } from './VehicleCard';
 
@@ -430,11 +431,16 @@ export function VehicleDetailPage({
                 )}
               </div>
 
+              {/* Live Visual Port Balance Tracker */}
+              {isBalanceDeal && (
+                <PortTrackingProgress transit={vehicle.transit} variant="full" />
+              )}
+
               {/* Dispatch Details */}
               <div className="border border-slate-200 rounded-xl p-4 bg-white space-y-2.5 text-xs sm:text-sm">
                 <div className="flex items-center gap-2 font-semibold text-zinc-950">
                   <Anchor className="w-4 h-4 text-blue-900" aria-hidden="true" />
-                  <span>Shipping & Port Dispatch</span>
+                  <span>Shipping &amp; Port Dispatch</span>
                 </div>
                 <div className="flex justify-between gap-4">
                   <span className="text-slate-500">

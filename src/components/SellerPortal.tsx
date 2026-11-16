@@ -6,6 +6,7 @@ import {
   ChevronRight,
   Download,
   Film,
+  KeyRound,
   LogOut,
   Mail,
   MessageSquare,
@@ -21,18 +22,23 @@ import {
 import {
   DESTINATION_PORTS,
   PORT_REGIONS,
+  PORT_TRACKING_STAGES,
   formatAutoPrice,
   formatEtaDate,
+  getPortTrackingStage,
   getVehicleImages,
 } from '../data/seedInventory.ts';
+import { isValidPortalPassword, savePortalPassword } from '../lib/portalAuth.ts';
 import type {
   BookingRequest,
   ExportVehicle,
   ListingMode,
+  PortTrackingStage,
   UnloadingVideo,
   VehicleCategory,
   VehicleStatus,
 } from '../types/autoTrade.ts';
+import { PortTrackingProgress } from './PortTrackingProgress';
 import { PortalLoginGate } from './PortalLoginGate';
 import { ResilientImage } from './ResilientImage';
 
@@ -192,9 +198,18 @@ export function SellerPortal({
     `${DESTINATION_PORTS[0].name}, ${DESTINATION_PORTS[0].country}`,
   );
   const [customBalancePortMode, setCustomBalancePortMode] = useState(false);
+  const [trackingStage, setTrackingStage] = useState<PortTrackingStage>('In Transit');
   const [etaDate, setEtaDate] = useState('2026-11-28');
   const [vesselName, setVesselName] = useState('Next Weekly RoRo Sailing');
   const [arrivalStatus, setArrivalStatus] = useState('Ready to Book · Yokohama Yard');
+
+  // Change CRM Password Modal State
+  const [pwModalOpen, setPwModalOpen] = useState(false);
+  const [pwCurrent, setPwCurrent] = useState('');
+  const [pwNext, setPwNext] = useState('');
+  const [pwConfirm, setPwConfirm] = useState('');
+  const [pwError, setPwError] = useState<string | null>(null);
+  const [pwSaved, setPwSaved] = useState(false);
   const [fobUsd, setFobUsd] = useState(16500);
   const [cbm, setCbm] = useState(11.6);
   const [fullCifUsd, setFullCifUsd] = useState(18100);
@@ -446,6 +461,7 @@ export function SellerPortal({
     setDestinationPortId(DESTINATION_PORTS[0].id);
     setDispatchedPortText(`${DESTINATION_PORTS[0].name}, ${DESTINATION_PORTS[0].country}`);
     setCustomBalancePortMode(false);
+    setTrackingStage('In Transit');
     setEtaDate('2026-11-28');
     setVesselName('Next Weekly RoRo Sailing');
     setArrivalStatus('Ready to Book · Yokohama Yard');
@@ -493,6 +509,7 @@ export function SellerPortal({
         : `${matchedPort.name}, ${matchedPort.country}`,
     );
     setCustomBalancePortMode(false);
+    setTrackingStage(getPortTrackingStage(vehicle.transit));
     setEtaDate(vehicle.transit.etaDate || '2026-11-28');
     setVesselName(vehicle.transit.vesselName);
     setArrivalStatus(vehicle.transit.arrivalStatus);
@@ -560,6 +577,7 @@ export function SellerPortal({
               : `Ships to ${selectedPort.name} & Worldwide`,
           vesselName: vesselName.trim() || 'Weekly RoRo Sailing',
           arrivalStatus: arrivalStatus.trim() || 'Ready to Book',
+          ...(dealType === 'balance-release' ? { trackingStage } : {}),
           ...(dealType === 'balance-release' && etaDate.trim()
             ? { etaDate: etaDate.trim() }
             : {}),
@@ -758,6 +776,22 @@ export function SellerPortal({
 
           <button
             type="button"
+            onClick={() => {
+              setPwError(null);
+              setPwSaved(false);
+              setPwCurrent('');
+              setPwNext('');
+              setPwConfirm('');
+              setPwModalOpen(true);
+            }}
+            className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+          >
+            <KeyRound className="w-3.5 h-3.5" aria-hidden="true" />
+            <span>Change Password</span>
+          </button>
+
+          <button
+            type="button"
             onClick={handleSignOut}
             className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 text-xs font-medium text-slate-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
           >
@@ -930,16 +964,52 @@ export function SellerPortal({
                               </div>
                             </td>
 
-                            <td className="py-3 px-4">
+                            <td className="py-3 px-4 min-w-[240px]">
                               <div className="text-xs font-medium text-zinc-950">
                                 {isBal ? 'Port Balance Deal' : 'Direct Japan Import'}
                               </div>
                               <div className="text-xs text-slate-500">
                                 {vehicle.transit.destinationPortLabel}
                               </div>
-                              {isBal && vehicle.transit.etaDate && (
-                                <div className="text-[11px] font-mono text-blue-900 mt-0.5">
-                                  ETA: {formatEtaDate(vehicle.transit.etaDate)}
+                              {isBal && (
+                                <div className="mt-2 space-y-2">
+                                  <PortTrackingProgress transit={vehicle.transit} variant="compact" />
+                                  <select
+                                    aria-label={`Tracking stage for ${vehicle.makeModel}`}
+                                    value={getPortTrackingStage(vehicle.transit)}
+                                    onChange={(e) => {
+                                      const nextStage = e.target.value as PortTrackingStage;
+                                      const portShort = vehicle.transit.destinationPortLabel;
+                                      const stageNote =
+                                        nextStage === 'In Transit'
+                                          ? `En Route to ${portShort}`
+                                          : nextStage === 'At Port'
+                                            ? `Arrived & Docked at ${portShort}`
+                                            : nextStage === 'Customs Clearing'
+                                              ? `B/L Endorsed · Customs Clearing at ${portShort}`
+                                              : `Cleared · Ready for Pickup at ${portShort}`;
+                                      onUpdateVehicle(vehicle.id, {
+                                        status:
+                                          nextStage === 'Ready for Pickup'
+                                            ? 'Available'
+                                            : nextStage === 'In Transit'
+                                              ? 'In Transit'
+                                              : vehicle.status,
+                                        transit: {
+                                          ...vehicle.transit,
+                                          trackingStage: nextStage,
+                                          arrivalStatus: stageNote,
+                                        },
+                                      });
+                                    }}
+                                    className="w-full px-2 py-1 text-[11px] font-medium rounded border border-blue-200 bg-blue-50/70 text-blue-900 cursor-pointer"
+                                  >
+                                    {PORT_TRACKING_STAGES.map((stage) => (
+                                      <option key={stage} value={stage}>
+                                        Tracker: {stage}
+                                      </option>
+                                    ))}
+                                  </select>
                                 </div>
                               )}
                             </td>
@@ -1502,6 +1572,72 @@ export function SellerPortal({
                             className="w-full px-3 py-2 text-sm font-mono rounded-lg border border-slate-300 bg-white"
                           />
                         </div>
+                      </div>
+
+                      {/* Visual Location & Status Tracking Bar Selector */}
+                      <div className="pt-3 border-t border-blue-200/80 space-y-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <label className="text-xs font-medium text-zinc-950">
+                            Customer Tracking Stage (Visual Progress Bar)
+                          </label>
+                          <span className="text-[11px] text-slate-500">
+                            Displayed live on storefront car card &amp; detail page
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                          {PORT_TRACKING_STAGES.map((stage) => {
+                            const active = trackingStage === stage;
+                            return (
+                              <button
+                                key={stage}
+                                type="button"
+                                onClick={() => {
+                                  setTrackingStage(stage);
+                                  const portLabel =
+                                    dispatchedPortText.trim() || selectedPort.name;
+                                  setArrivalStatus(
+                                    stage === 'In Transit'
+                                      ? `En Route to ${portLabel}`
+                                      : stage === 'At Port'
+                                        ? `Arrived & Docked at ${portLabel}`
+                                        : stage === 'Customs Clearing'
+                                          ? `Customs Clearing at ${portLabel}`
+                                          : `Ready for Pickup at ${portLabel}`,
+                                  );
+                                  if (stage === 'In Transit') setVehicleStatus('In Transit');
+                                  if (stage === 'Ready for Pickup') setVehicleStatus('Available');
+                                }}
+                                className={`px-3 py-2 text-xs font-medium rounded-lg border text-center transition-colors cursor-pointer ${
+                                  active
+                                    ? 'border-blue-900 bg-blue-900 text-white'
+                                    : 'border-slate-300 bg-white text-slate-700 hover:border-blue-400'
+                                }`}
+                              >
+                                {stage}
+                              </button>
+                            );
+                          })}
+                        </div>
+
+                        <PortTrackingProgress
+                          variant="full"
+                          transit={{
+                            dealType: 'balance-release',
+                            destinationPortId,
+                            destinationPortLabel:
+                              dispatchedPortText.trim() ||
+                              `${selectedPort.name}, ${selectedPort.country}`,
+                            vesselName,
+                            arrivalStatus,
+                            trackingStage,
+                            etaDate,
+                            fullCifUsd,
+                            priorDepositUsd: effectiveDeposit,
+                            balanceDueUsd: computedBalanceUsd,
+                            blStatus: 'Express B/L ready',
+                          }}
+                        />
                       </div>
                     </div>
                   )}
@@ -2210,6 +2346,129 @@ export function SellerPortal({
           )}
         </div>
       </div>
+
+      {/* Change CRM / Portal Password Modal */}
+      {pwModalOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Change Seller Portal Password"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/50 backdrop-blur-xs"
+          onClick={() => setPwModalOpen(false)}
+        >
+          <div
+            className="w-full max-w-md bg-white border border-slate-200 rounded-xl p-6 space-y-4 shadow-lg"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <KeyRound className="w-4 h-4 text-blue-900" aria-hidden="true" />
+                <h2 className="font-display text-base font-semibold text-zinc-950">
+                  Change CRM &amp; Portal Password
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPwModalOpen(false)}
+                aria-label="Close password modal"
+                className="p-1.5 text-slate-400 hover:text-zinc-950 rounded-lg cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {pwError && (
+              <p className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                {pwError}
+              </p>
+            )}
+            {pwSaved && (
+              <p className="text-xs text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
+                Password updated successfully. Use your new password next time you sign in.
+              </p>
+            )}
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!isValidPortalPassword(pwCurrent)) {
+                  setPwError('Current password is incorrect.');
+                  return;
+                }
+                if (pwNext.trim().length < 6) {
+                  setPwError('New password must be at least 6 characters.');
+                  return;
+                }
+                if (pwNext !== pwConfirm) {
+                  setPwError('New password and confirmation do not match.');
+                  return;
+                }
+                savePortalPassword(pwNext);
+                setPwError(null);
+                setPwSaved(true);
+                setPwCurrent('');
+                setPwNext('');
+                setPwConfirm('');
+              }}
+              className="space-y-3"
+            >
+              <div>
+                <label className="block text-xs font-medium text-zinc-950 mb-1">
+                  Current Password
+                </label>
+                <input
+                  type="password"
+                  required
+                  value={pwCurrent}
+                  onChange={(e) => setPwCurrent(e.target.value)}
+                  className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-zinc-950 mb-1">
+                  New Password (min 6 chars)
+                </label>
+                <input
+                  type="password"
+                  required
+                  minLength={6}
+                  value={pwNext}
+                  onChange={(e) => setPwNext(e.target.value)}
+                  className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-zinc-950 mb-1">
+                  Confirm New Password
+                </label>
+                <input
+                  type="password"
+                  required
+                  minLength={6}
+                  value={pwConfirm}
+                  onChange={(e) => setPwConfirm(e.target.value)}
+                  className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300"
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setPwModalOpen(false)}
+                  className="px-4 py-2 text-xs font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg cursor-pointer"
+                >
+                  Close
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 text-xs font-medium text-white bg-blue-900 hover:bg-blue-950 rounded-lg cursor-pointer"
+                >
+                  Update Password
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

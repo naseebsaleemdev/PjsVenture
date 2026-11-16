@@ -115,6 +115,7 @@ async function startServer() {
       : existing.transit;
     if (mergedTransit.dealType !== 'balance-release') {
       delete mergedTransit.etaDate;
+      delete mergedTransit.trackingStage;
     }
     const updated: ExportVehicle = {
       ...existing,

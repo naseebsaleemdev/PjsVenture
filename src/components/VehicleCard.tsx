@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Bookmark, ChevronLeft, ChevronRight, FileText } from 'lucide-react';
 import { formatAutoPrice, formatEtaDate, getVehicleImages } from '../data/seedInventory.ts';
 import type { AutoCurrency, ExportVehicle } from '../types/autoTrade.ts';
+import { PortTrackingProgress } from './PortTrackingProgress';
 import { ResilientImage } from './ResilientImage';
 
 interface VehicleCardProps {
@@ -139,6 +140,8 @@ export function VehicleCard({
       </div>
 
       <div className="px-6 pb-6 pt-4 border-t border-slate-100 space-y-4">
+        {isBalanceDeal && <PortTrackingProgress transit={vehicle.transit} variant="compact" />}
+
         {isBalanceDeal ? (
           <div className="space-y-1.5 text-xs">
             <div className="flex justify-between text-slate-500">
@@ -169,7 +172,7 @@ export function VehicleCard({
               </span>
             </div>
             <div className="flex justify-between items-baseline pt-1">
-              <span className="text-xs font-semibold text-zinc-950">Caribbean CIF Estimate</span>
+              <span className="text-xs font-semibold text-zinc-950">Estimated CIF Price</span>
               <span className="font-mono text-lg font-semibold text-zinc-950 tabular-nums">
                 {formatAutoPrice(vehicle.transit.fullCifUsd, currency)}
               </span>

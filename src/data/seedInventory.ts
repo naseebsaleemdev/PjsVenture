@@ -4,6 +4,8 @@ import type {
   DestinationPort,
   ExportStep,
   ExportVehicle,
+  PortTrackingStage,
+  ShippingTransitInfo,
   UnloadingVideo,
 } from '../types/autoTrade.ts';
 
@@ -692,7 +694,8 @@ export const INITIAL_VEHICLES: ExportVehicle[] = [
       destinationPortId: 'kingston',
       destinationPortLabel: 'Port of Kingston, Jamaica',
       vesselName: 'MV Morning Lily',
-      arrivalStatus: 'Sailed from Yokohama · Docked at Kingston',
+      arrivalStatus: 'Docked at Port of Kingston · Ready for Clearance',
+      trackingStage: 'At Port',
       etaDate: '2026-11-18',
       fullCifUsd: 31360,
       priorDepositUsd: 14160,
@@ -748,6 +751,7 @@ export const INITIAL_VEHICLES: ExportVehicle[] = [
       destinationPortLabel: 'Port of Nassau, Bahamas',
       vesselName: 'MV Hoegh Trigger',
       arrivalStatus: 'Sailed from Yokohama · En Route to Nassau',
+      trackingStage: 'In Transit',
       etaDate: '2026-11-24',
       fullCifUsd: 23390,
       priorDepositUsd: 10500,
@@ -799,7 +803,7 @@ export const EXPORT_STEPS: ExportStep[] = [
     title: 'Select & Book Online',
     window: 'Day 1',
     description:
-      'Browse verified Japanese yard stock or special port balance-release units. Select your Caribbean island port, shipping mode, and submit a booking request.',
+      'Browse verified Japanese yard stock or special port balance-release units. Select your destination port, shipping mode, and submit a booking request.',
   },
   {
     step: '02',
@@ -810,14 +814,14 @@ export const EXPORT_STEPS: ExportStep[] = [
   },
   {
     step: '03',
-    title: 'Japanese Export & RoRo Dispatch',
+    title: 'Export Prep & RoRo Dispatch',
     window: 'Day 5–10',
     description:
-      'We complete Japanese customs deregistration, JEVIC/radiation certification, and load your vehicle onto weekly RoRo or container vessels bound for the Caribbean.',
+      'We complete Japanese customs deregistration, JEVIC/QISJ/radiation certification, and load your vehicle onto weekly RoRo or container vessels.',
   },
   {
     step: '04',
-    title: 'DHL Documents & Island Clearance',
+    title: 'DHL Documents & Port Clearance',
     window: 'Arrival',
     description:
       'Original Bill of Lading, Export Certificate, and Invoice arrive via DHL ahead of the ship so your local broker clears customs smoothly.',
@@ -839,6 +843,32 @@ export function formatAutoPrice(usdAmount: number, currency: AutoCurrency): stri
   const converted = usdAmount * rate;
   const rounded = Math.round(converted / 10) * 10;
   return `${symbol}${rounded.toLocaleString('en-US')}`;
+}
+
+export const PORT_TRACKING_STAGES: PortTrackingStage[] = [
+  'In Transit',
+  'At Port',
+  'Customs Clearing',
+  'Ready for Pickup',
+];
+
+export function getPortTrackingStage(
+  transit: Pick<ShippingTransitInfo, 'trackingStage' | 'arrivalStatus'>,
+): PortTrackingStage {
+  if (transit.trackingStage && PORT_TRACKING_STAGES.includes(transit.trackingStage)) {
+    return transit.trackingStage;
+  }
+  const lower = (transit.arrivalStatus || '').toLowerCase();
+  if (lower.includes('pickup') || lower.includes('ready to collect') || lower.includes('cleared')) {
+    return 'Ready for Pickup';
+  }
+  if (lower.includes('customs') || lower.includes('clearing')) {
+    return 'Customs Clearing';
+  }
+  if (lower.includes('docked') || lower.includes('arrived') || lower.includes('at port')) {
+    return 'At Port';
+  }
+  return 'In Transit';
 }
 
 export function formatEtaDate(isoDate?: string): string | null {
