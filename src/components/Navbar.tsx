@@ -1,18 +1,34 @@
 import { useState } from 'react';
 import { Menu, X } from 'lucide-react';
 
+export type AppRoute =
+  | '/'
+  | '/inventory'
+  | '/port-deals'
+  | '/ports'
+  | '/calculator'
+  | '/book'
+  | '/portal';
+
 interface NavbarProps {
-  onBookVehicle: () => void;
-  onOpenPortal: () => void;
+  currentRoute: AppRoute;
+  onNavigate: (route: AppRoute) => void;
 }
 
-export function Navbar({ onBookVehicle, onOpenPortal }: NavbarProps) {
+const NAV_ITEMS: { label: string; route: AppRoute }[] = [
+  { label: 'Inventory', route: '/inventory' },
+  { label: 'Port Deals', route: '/port-deals' },
+  { label: 'Caribbean Ports', route: '/ports' },
+  { label: 'CIF Calculator', route: '/calculator' },
+  { label: 'Seller Portal', route: '/portal' },
+];
+
+export function Navbar({ currentRoute, onNavigate }: NavbarProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  const handleAnchor = (href: string) => {
+  const go = (route: AppRoute) => {
     setMobileOpen(false);
-    const el = document.querySelector(href);
-    el?.scrollIntoView({ behavior: 'smooth' });
+    onNavigate(route);
   };
 
   return (
@@ -20,49 +36,49 @@ export function Navbar({ onBookVehicle, onOpenPortal }: NavbarProps) {
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-8">
         {/* Zone 1: Brand Wordmark */}
         <a
-          href="#top"
+          href="/"
+          onClick={(e) => {
+            e.preventDefault();
+            go('/');
+          }}
           className="font-display text-xl font-bold tracking-tight text-zinc-950 whitespace-nowrap shrink-0 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-blue-900 rounded"
         >
           CrownWheel
         </a>
 
-        {/* Zone 2: Primary Navigation Links */}
+        {/* Zone 2: 5 Single-Line Navigation Links */}
         <nav
           aria-label="Primary navigation"
-          className="hidden md:flex items-center gap-8 text-sm font-medium text-slate-600"
+          className="hidden md:flex items-center gap-7 text-sm font-medium text-slate-600"
         >
-          <a
-            href="#inventory"
-            className="whitespace-nowrap shrink-0 py-2 text-slate-600 hover:text-zinc-950 underline-offset-4 hover:underline transition-colors duration-150 rounded"
-          >
-            Inventory
-          </a>
-          <a
-            href="#export-process"
-            className="whitespace-nowrap shrink-0 py-2 text-slate-600 hover:text-zinc-950 underline-offset-4 hover:underline transition-colors duration-150 rounded"
-          >
-            How It Works
-          </a>
-          <a
-            href="#cif-calculator"
-            className="whitespace-nowrap shrink-0 py-2 text-slate-600 hover:text-zinc-950 underline-offset-4 hover:underline transition-colors duration-150 rounded"
-          >
-            Caribbean CIF
-          </a>
-          <button
-            type="button"
-            onClick={onOpenPortal}
-            className="whitespace-nowrap shrink-0 py-2 text-slate-600 hover:text-blue-900 underline-offset-4 hover:underline transition-colors duration-150 cursor-pointer rounded"
-          >
-            Seller Portal
-          </button>
+          {NAV_ITEMS.map((item) => {
+            const active = currentRoute === item.route;
+            return (
+              <a
+                key={item.route}
+                href={item.route}
+                onClick={(e) => {
+                  e.preventDefault();
+                  go(item.route);
+                }}
+                aria-current={active ? 'page' : undefined}
+                className={`whitespace-nowrap shrink-0 py-2 underline-offset-8 transition-colors duration-150 rounded ${
+                  active
+                    ? 'text-zinc-950 underline decoration-2 decoration-blue-900'
+                    : 'text-slate-600 hover:text-zinc-950 hover:underline'
+                }`}
+              >
+                {item.label}
+              </a>
+            );
+          })}
         </nav>
 
         {/* Zone 3: Single Primary Action */}
         <div className="flex items-center gap-3 shrink-0">
           <button
             type="button"
-            onClick={onBookVehicle}
+            onClick={() => go('/book')}
             className="hidden md:inline-flex items-center justify-center px-5 py-2.5 text-sm font-medium text-white bg-blue-900 hover:bg-blue-950 rounded-lg transition-colors duration-150 whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-900"
           >
             Book a Vehicle
@@ -83,43 +99,24 @@ export function Navbar({ onBookVehicle, onOpenPortal }: NavbarProps) {
       {mobileOpen && (
         <div className="md:hidden border-t border-slate-200 bg-white px-4 py-4">
           <nav aria-label="Mobile navigation" className="flex flex-col gap-1">
+            {NAV_ITEMS.map((item) => {
+              const active = currentRoute === item.route;
+              return (
+                <button
+                  key={item.route}
+                  type="button"
+                  onClick={() => go(item.route)}
+                  className={`w-full text-left px-3 py-3 text-base font-medium rounded-lg cursor-pointer ${
+                    active ? 'bg-blue-50 text-blue-900' : 'text-slate-700 hover:bg-slate-50'
+                  }`}
+                >
+                  {item.label}
+                </button>
+              );
+            })}
             <button
               type="button"
-              onClick={() => handleAnchor('#inventory')}
-              className="w-full text-left px-3 py-3 text-base font-medium text-slate-700 hover:bg-slate-50 rounded-lg cursor-pointer"
-            >
-              Inventory
-            </button>
-            <button
-              type="button"
-              onClick={() => handleAnchor('#export-process')}
-              className="w-full text-left px-3 py-3 text-base font-medium text-slate-700 hover:bg-slate-50 rounded-lg cursor-pointer"
-            >
-              How It Works
-            </button>
-            <button
-              type="button"
-              onClick={() => handleAnchor('#cif-calculator')}
-              className="w-full text-left px-3 py-3 text-base font-medium text-slate-700 hover:bg-slate-50 rounded-lg cursor-pointer"
-            >
-              Caribbean CIF
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setMobileOpen(false);
-                onOpenPortal();
-              }}
-              className="w-full text-left px-3 py-3 text-base font-medium text-blue-900 hover:bg-blue-50 rounded-lg cursor-pointer"
-            >
-              Seller Portal
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setMobileOpen(false);
-                onBookVehicle();
-              }}
+              onClick={() => go('/book')}
               className="mt-2 w-full px-4 py-3 text-sm font-medium text-white bg-blue-900 hover:bg-blue-950 rounded-lg cursor-pointer"
             >
               Book a Vehicle

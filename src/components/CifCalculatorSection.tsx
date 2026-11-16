@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Check, Ship } from 'lucide-react';
 import { DESTINATION_PORTS, formatAutoPrice } from '../data/seedInventory.ts';
 import type { AutoCurrency, ExportVehicle } from '../types/autoTrade.ts';
+import { PageBanner } from './PageBanner';
 
 export type ShippingMethod = 'RoRo Vessel' | '20ft Container' | '40ft Shared Container';
 
@@ -20,20 +21,30 @@ export interface LockedCifQuote {
 interface CifCalculatorSectionProps {
   vehicles: ExportVehicle[];
   currency: AutoCurrency;
+  initialPortId?: string;
   onLockCifQuote: (quote: LockedCifQuote) => void;
 }
 
 export function CifCalculatorSection({
   vehicles,
   currency,
+  initialPortId,
   onLockCifQuote,
 }: CifCalculatorSectionProps) {
   const [selectedVehicleId, setSelectedVehicleId] = useState<string>(vehicles[0]?.id ?? 'custom');
   const [customFobUsd, setCustomFobUsd] = useState<number>(15000);
-  const [selectedPortId, setSelectedPortId] = useState<string>(DESTINATION_PORTS[0].id);
+  const [selectedPortId, setSelectedPortId] = useState<string>(
+    initialPortId || DESTINATION_PORTS[0].id,
+  );
   const [shippingMethod, setShippingMethod] = useState<ShippingMethod>('RoRo Vessel');
   const [includeInsurance, setIncludeInsurance] = useState<boolean>(true);
   const [includeJevic, setIncludeJevic] = useState<boolean>(true);
+
+  useEffect(() => {
+    if (initialPortId) {
+      setSelectedPortId(initialPortId);
+    }
+  }, [initialPortId]);
 
   const selectedVehicle = vehicles.find((v) => v.id === selectedVehicleId);
   const isBalanceDeal = selectedVehicle?.transit.dealType === 'balance-release';
@@ -78,18 +89,14 @@ export function CifCalculatorSection({
   };
 
   return (
-    <section id="cif-calculator" className="py-16 sm:py-24 bg-slate-50 border-b border-slate-200">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="max-w-2xl mb-12">
-          <p className="text-sm font-medium text-blue-900 mb-2">Caribbean Freight & CIF Estimator</p>
-          <h2 className="font-display text-3xl sm:text-4xl font-semibold tracking-tight text-zinc-950">
-            Calculate landed CIF to Nassau, Kingston, Cayman, or your island port.
-          </h2>
-          <p className="mt-3 text-base text-slate-600 leading-relaxed">
-            Choose any listed car (or a custom Japan auction budget) and your Caribbean discharge
-            port to estimate RoRo or container shipping before placing a booking.
-          </p>
-        </div>
+    <div>
+      <PageBanner
+        breadcrumb="CrownWheel · Caribbean CIF Calculator"
+        title="Calculate landed CIF to Nassau, Kingston, Cayman, or your island port."
+        subtitle="Choose any listed vehicle or custom Japan auction budget and your Caribbean discharge port to estimate RoRo or container shipping before booking."
+      />
+      <section className="py-12 sm:py-16 bg-slate-50">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           <div className="lg:col-span-7 bg-white border border-slate-200 rounded-xl p-6 sm:p-8 space-y-6">
@@ -355,7 +362,8 @@ export function CifCalculatorSection({
             </button>
           </div>
         </div>
-      </div>
-    </section>
+        </div>
+      </section>
+    </div>
   );
 }

@@ -1,42 +1,82 @@
+import type { AppRoute } from './Navbar';
+
 interface FooterProps {
-  onOpenPortal: () => void;
+  onNavigate: (route: AppRoute) => void;
 }
 
-export function Footer({ onOpenPortal }: FooterProps) {
+export function Footer({ onNavigate }: FooterProps) {
   return (
     <footer className="bg-slate-50 border-t border-slate-200 py-12">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
         <div>
           <a
-            href="#top"
+            href="/"
+            onClick={(e) => {
+              e.preventDefault();
+              onNavigate('/');
+            }}
             className="font-display text-lg font-bold tracking-tight text-zinc-950"
           >
             CrownWheel
           </a>
           <p className="mt-1 text-xs text-slate-500">
             Yokohama <span aria-hidden="true">·</span> Nassau <span aria-hidden="true">·</span>{' '}
-            Kingston <span aria-hidden="true">·</span> Cayman <span aria-hidden="true">·</span>{' '}
-            trade@crownwheel.jp
+            Kingston <span aria-hidden="true">·</span> Cayman Islands{' '}
+            <span aria-hidden="true">·</span> trade@crownwheel.jp
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-6 text-xs text-slate-600">
-          <a href="#inventory" className="hover:text-zinc-950 transition-colors">
+          <a
+            href="/inventory"
+            onClick={(e) => {
+              e.preventDefault();
+              onNavigate('/inventory');
+            }}
+            className="hover:text-zinc-950 transition-colors"
+          >
             Inventory
           </a>
-          <a href="#export-process" className="hover:text-zinc-950 transition-colors">
-            How It Works
+          <a
+            href="/port-deals"
+            onClick={(e) => {
+              e.preventDefault();
+              onNavigate('/port-deals');
+            }}
+            className="hover:text-zinc-950 transition-colors"
+          >
+            Port Deals
           </a>
-          <a href="#cif-calculator" className="hover:text-zinc-950 transition-colors">
-            Caribbean CIF
+          <a
+            href="/ports"
+            onClick={(e) => {
+              e.preventDefault();
+              onNavigate('/ports');
+            }}
+            className="hover:text-zinc-950 transition-colors"
+          >
+            Caribbean Ports
           </a>
-          <button
-            type="button"
-            onClick={onOpenPortal}
-            className="hover:text-blue-900 transition-colors cursor-pointer"
+          <a
+            href="/calculator"
+            onClick={(e) => {
+              e.preventDefault();
+              onNavigate('/calculator');
+            }}
+            className="hover:text-zinc-950 transition-colors"
+          >
+            CIF Calculator
+          </a>
+          <a
+            href="/portal"
+            onClick={(e) => {
+              e.preventDefault();
+              onNavigate('/portal');
+            }}
+            className="hover:text-blue-900 transition-colors"
           >
             Seller Portal
-          </button>
+          </a>
           <span className="text-slate-400">© 2026 CrownWheel Auto Trade</span>
         </div>
       </div>

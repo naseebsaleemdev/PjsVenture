@@ -3,6 +3,7 @@ import { AlertCircle, CheckCircle2, Copy } from 'lucide-react';
 import { DESTINATION_PORTS } from '../data/seedInventory.ts';
 import type { BookingRequest, ExportVehicle } from '../types/autoTrade.ts';
 import type { LockedCifQuote, ShippingMethod } from './CifCalculatorSection';
+import { PageBanner } from './PageBanner';
 
 interface ImportInquiryFormProps {
   selectedVehicleForBooking: ExportVehicle | null;
@@ -175,8 +176,14 @@ export function ImportInquiryForm({
   };
 
   return (
-    <section id="inquiry" className="py-16 sm:py-24 bg-white">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div>
+      <PageBanner
+        breadcrumb="CrownWheel · Online Booking & Port Reservation"
+        title="Book your vehicle for Japan-to-Caribbean import."
+        subtitle="Reserve any listed yard car or claim an in-transit port balance-release unit. Our export desk prepares your proforma invoice and RoRo shipping schedule."
+      />
+      <section className="py-12 sm:py-16 bg-slate-50">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12 items-start">
           <div className="lg:col-span-5">
             <p className="text-sm font-medium text-blue-900 mb-2">
@@ -450,6 +457,7 @@ export function ImportInquiryForm({
           </div>
         </div>
       </div>
-    </section>
+      </section>
+    </div>
   );
 }
