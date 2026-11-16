@@ -2,5 +2,7 @@
   "name": "Kaarigar Studio",
   "description": "Bespoke websites, digital commerce platforms, and full-stack web products engineered for speed and clarity.",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }

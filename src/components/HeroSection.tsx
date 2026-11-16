@@ -15,18 +15,18 @@ export function HeroSection({ onBrowseInventory, onViewBalanceDeals }: HeroSecti
           <div className="lg:col-span-6 flex flex-col justify-between py-2">
             <div>
               <p className="text-sm font-medium text-slate-500 mb-5">
-                Japan-to-Caribbean Auto Imports <span aria-hidden="true">·</span> Bahamas · Jamaica
-                · Cayman Islands · Turks & Caicos · St. Lucia
+                Worldwide Auto Exports <span aria-hidden="true">·</span> Caribbean · East &amp; West
+                Africa · UK &amp; Europe · Oceania · Middle East
               </p>
 
               <h1 className="font-display font-bold tracking-tight text-zinc-950 text-[clamp(2.25rem,4vw,3.75rem)] leading-[1.08] max-w-xl">
-                Verified Japanese vehicles, booked online and shipped to your Caribbean port.
+                Verified Japanese &amp; global vehicles, booked online and shipped to your port.
               </h1>
 
               <p className="mt-6 text-base sm:text-lg text-slate-600 leading-relaxed max-w-xl">
-                Browse auction-inspected SUVs, hybrids, and pickups ready for import from Japan to
-                ports across the Bahamas and Caribbean near the US—plus occasional in-transit units
-                available by paying only the remaining balance.
+                Browse auction-inspected SUVs, hybrids, sedans, and pickups ready for RoRo or
+                container shipping to 150+ countries—plus select in-transit port balance-release
+                units you can clear immediately on arrival.
               </p>
             </div>
 
@@ -55,7 +55,7 @@ export function HeroSection({ onBrowseInventory, onViewBalanceDeals }: HeroSecti
               <ResilientImage
                 src={AUTO_HERO_MEDIA.src}
                 alt={AUTO_HERO_MEDIA.alt}
-                fallbackTitle="CrownWheel Japan Export Bay"
+                fallbackTitle="PJS Ventures Japan Export Bay"
                 priority
                 className="w-full h-full lg:h-full object-cover"
               />

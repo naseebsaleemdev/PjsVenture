@@ -8,16 +8,16 @@ export function AuctionProcessSection() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12 items-stretch mb-14">
           <div className="lg:col-span-6 flex flex-col justify-center">
             <p className="text-sm font-medium text-blue-900 mb-2">
-              Japan-to-Caribbean Shipping & Clearance
+              Worldwide Export Shipping &amp; Clearance
             </p>
             <h2 className="font-display text-3xl sm:text-4xl font-semibold tracking-tight text-zinc-950">
-              From Yokohama inspection bays straight to Bahamas, Jamaica, and Caribbean harbors.
+              From Yokohama &amp; global inspection bays straight to your local port.
             </h2>
             <p className="mt-4 text-base text-slate-600 leading-relaxed">
-              Most clients pick a listed vehicle online, reserve it, and let us handle Japanese
-              deregistration, JEVIC certification, and weekly RoRo or container dispatch to your
-              nearest Caribbean port. When an occasional in-transit unit opens on balance-release,
-              local buyers can also step in and clear it right away.
+              Most clients pick a listed vehicle online, reserve it, and let us handle export
+              deregistration, JEVIC / QISJ / EAA certification, and weekly RoRo or container
+              dispatch to Caribbean, African, UK, European, Asian, or Oceania ports. When an
+              in-transit unit opens on balance-release, local buyers can clear it immediately.
             </p>
           </div>
 

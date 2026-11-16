@@ -28,9 +28,9 @@ export function PortDealsPage({
   return (
     <div>
       <PageBanner
-        breadcrumb="CrownWheel · Port Balance-Release Deals"
+        breadcrumb="PJS Ventures · Port Balance-Release Deals"
         title="Already shipped. Half paid. Settle the remaining balance at your port."
-        subtitle="Select units where the original buyer paid a 40%–50% deposit prior to sailing and backed out before discharge. Claim the re-assigned Bill of Lading and clear directly from your island port."
+        subtitle="Select units where the original buyer paid a 40%–50% deposit prior to sailing and backed out before discharge. Claim the re-assigned Bill of Lading and clear directly at your destination port."
       />
 
       {/* 3-Step Balance Clearance Explainer */}
@@ -42,8 +42,8 @@ export function PortDealsPage({
               1. Already Aboard Vessel or Docked
             </h2>
             <p className="mt-2 text-sm text-slate-600 leading-relaxed">
-              No 5-week sea wait. These vehicles have already passed Japanese pre-export inspection
-              and are approaching or docked at Caribbean ports.
+              No 5-week sea wait. These vehicles have already passed pre-export inspection and are
+              approaching or docked at destination ports worldwide.
             </p>
           </div>
 

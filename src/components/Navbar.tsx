@@ -5,10 +5,13 @@ export type AppRoute =
   | '/'
   | '/inventory'
   | '/port-deals'
+  | '/markets'
   | '/ports'
   | '/calculator'
+  | '/how-to-buy'
   | '/book'
-  | '/portal';
+  | '/portal'
+  | `/listing/${string}`;
 
 interface NavbarProps {
   currentRoute: AppRoute;
@@ -18,9 +21,10 @@ interface NavbarProps {
 const NAV_ITEMS: { label: string; route: AppRoute }[] = [
   { label: 'Inventory', route: '/inventory' },
   { label: 'Port Deals', route: '/port-deals' },
-  { label: 'Caribbean Ports', route: '/ports' },
+  { label: 'Global Markets', route: '/markets' },
+  { label: 'Global Ports', route: '/ports' },
   { label: 'CIF Calculator', route: '/calculator' },
-  { label: 'Seller Portal', route: '/portal' },
+  { label: 'How to Buy', route: '/how-to-buy' },
 ];
 
 export function Navbar({ currentRoute, onNavigate }: NavbarProps) {
@@ -33,7 +37,7 @@ export function Navbar({ currentRoute, onNavigate }: NavbarProps) {
 
   return (
     <header className="sticky top-0 z-40 bg-slate-50/95 backdrop-blur-sm border-b border-slate-200">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-8">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-6">
         {/* Zone 1: Brand Wordmark */}
         <a
           href="/"
@@ -43,16 +47,18 @@ export function Navbar({ currentRoute, onNavigate }: NavbarProps) {
           }}
           className="font-display text-xl font-bold tracking-tight text-zinc-950 whitespace-nowrap shrink-0 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-blue-900 rounded"
         >
-          CrownWheel
+          PJS Ventures
         </a>
 
-        {/* Zone 2: 5 Single-Line Navigation Links */}
+        {/* Zone 2: Navigation Links */}
         <nav
           aria-label="Primary navigation"
-          className="hidden md:flex items-center gap-7 text-sm font-medium text-slate-600"
+          className="hidden lg:flex items-center gap-6 text-sm font-medium text-slate-600"
         >
           {NAV_ITEMS.map((item) => {
-            const active = currentRoute === item.route;
+            const active =
+              currentRoute === item.route ||
+              (item.route === '/inventory' && currentRoute.startsWith('/listing/'));
             return (
               <a
                 key={item.route}
@@ -79,7 +85,7 @@ export function Navbar({ currentRoute, onNavigate }: NavbarProps) {
           <button
             type="button"
             onClick={() => go('/book')}
-            className="hidden md:inline-flex items-center justify-center px-5 py-2.5 text-sm font-medium text-white bg-blue-900 hover:bg-blue-950 rounded-lg transition-colors duration-150 whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-900"
+            className="hidden lg:inline-flex items-center justify-center px-5 py-2.5 text-sm font-medium text-white bg-blue-900 hover:bg-blue-950 rounded-lg transition-colors duration-150 whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-900"
           >
             Book a Vehicle
           </button>
@@ -89,7 +95,7 @@ export function Navbar({ currentRoute, onNavigate }: NavbarProps) {
             onClick={() => setMobileOpen((prev) => !prev)}
             aria-expanded={mobileOpen}
             aria-label={mobileOpen ? 'Close menu' : 'Open menu'}
-            className="md:hidden inline-flex items-center justify-center w-11 h-11 rounded-lg border border-slate-200 bg-white text-zinc-950 hover:bg-slate-100 transition-colors duration-150 cursor-pointer"
+            className="lg:hidden inline-flex items-center justify-center w-11 h-11 rounded-lg border border-slate-200 bg-white text-zinc-950 hover:bg-slate-100 transition-colors duration-150 cursor-pointer"
           >
             {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
@@ -97,7 +103,7 @@ export function Navbar({ currentRoute, onNavigate }: NavbarProps) {
       </div>
 
       {mobileOpen && (
-        <div className="md:hidden border-t border-slate-200 bg-white px-4 py-4">
+        <div className="lg:hidden border-t border-slate-200 bg-white px-4 py-4">
           <nav aria-label="Mobile navigation" className="flex flex-col gap-1">
             {NAV_ITEMS.map((item) => {
               const active = currentRoute === item.route;

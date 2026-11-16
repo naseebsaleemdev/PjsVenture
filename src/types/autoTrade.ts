@@ -27,6 +27,7 @@ export interface ShippingTransitInfo {
   destinationPortLabel: string;
   vesselName: string;
   arrivalStatus: string;
+  etaDate?: string;
   fullCifUsd: number;
   priorDepositUsd: number;
   balanceDueUsd: number;
@@ -50,7 +51,9 @@ export interface ExportVehicle {
   color: string;
   port: string;
   fobUsd: number;
+  cbm?: number;
   image: string;
+  images?: string[];
   imageAlt: string;
   createdAt: string;
   transit: ShippingTransitInfo;
@@ -74,14 +77,25 @@ export interface BookingRequest {
   shippingMethod: 'RoRo Vessel' | '20ft Container' | '40ft Shared Container';
   quotedAmountUsd: number;
   notes: string;
-  status: 'Pending Review' | 'Deposit Confirmed' | 'Shipped / B/L Issued' | 'Cancelled';
+  leadSource?: string;
+  crmNotes?: string;
+  status: 'Pending Review' | 'Contacted' | 'Deposit Confirmed' | 'Shipped / B/L Issued' | 'Cancelled';
   createdAt: string;
 }
+
+export type GlobalPortRegion =
+  | 'Caribbean & Americas'
+  | 'Africa'
+  | 'Europe & UK'
+  | 'Asia & Middle East'
+  | 'Oceania & Pacific';
 
 export interface DestinationPort {
   id: string;
   name: string;
   country: string;
+  freightCountry: string;
+  region: GlobalPortRegion;
   regionTag: string;
   transitDays: string;
   roroUsd: number;
@@ -96,3 +110,16 @@ export interface ExportStep {
   window: string;
   description: string;
 }
+
+export interface UnloadingVideo {
+  id: string;
+  title: string;
+  portLabel: string;
+  containerType: string;
+  vehicleSummary: string;
+  videoUrl: string;
+  posterUrl: string;
+  durationLabel: string;
+  createdAt: string;
+}
+

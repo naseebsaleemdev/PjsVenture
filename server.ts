@@ -3,8 +3,16 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
-import { INITIAL_BOOKINGS, INITIAL_VEHICLES } from './src/data/seedInventory.ts';
-import type { BookingRequest, ExportVehicle } from './src/types/autoTrade.ts';
+import {
+  INITIAL_BOOKINGS,
+  INITIAL_UNLOADING_VIDEOS,
+  INITIAL_VEHICLES,
+} from './src/data/seedInventory.ts';
+import type {
+  BookingRequest,
+  ExportVehicle,
+  UnloadingVideo,
+} from './src/types/autoTrade.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -15,6 +23,7 @@ const STORE_PATH = path.join(DATA_DIR, 'store.json');
 interface StoreData {
   vehicles: ExportVehicle[];
   bookings: BookingRequest[];
+  videos: UnloadingVideo[];
 }
 
 function readStore(): StoreData {
@@ -26,6 +35,7 @@ function readStore(): StoreData {
       const initial: StoreData = {
         vehicles: INITIAL_VEHICLES,
         bookings: INITIAL_BOOKINGS,
+        videos: INITIAL_UNLOADING_VIDEOS,
       };
       fs.writeFileSync(STORE_PATH, JSON.stringify(initial, null, 2), 'utf-8');
       return initial;
@@ -35,11 +45,13 @@ function readStore(): StoreData {
     return {
       vehicles: Array.isArray(parsed.vehicles) ? parsed.vehicles : INITIAL_VEHICLES,
       bookings: Array.isArray(parsed.bookings) ? parsed.bookings : INITIAL_BOOKINGS,
+      videos: Array.isArray(parsed.videos) ? parsed.videos : INITIAL_UNLOADING_VIDEOS,
     };
   } catch {
     return {
       vehicles: INITIAL_VEHICLES,
       bookings: INITIAL_BOOKINGS,
+      videos: INITIAL_UNLOADING_VIDEOS,
     };
   }
 }
@@ -55,7 +67,7 @@ async function startServer() {
   const app = express();
   const PORT = Number(process.env.PORT) || 3000;
 
-  app.use(express.json({ limit: '6mb' }));
+  app.use(express.json({ limit: '15mb' }));
 
   // Public & Portal Vehicle Inventory API
   app.get('/api/vehicles', (_req, res) => {
@@ -70,8 +82,15 @@ async function startServer() {
       return;
     }
     const store = readStore();
+    const gallery = Array.isArray(body.images) && body.images.length > 0
+      ? body.images
+      : body.image
+        ? [body.image]
+        : [];
     const created: ExportVehicle = {
       ...(body as ExportVehicle),
+      image: gallery[0] || body.image || '',
+      images: gallery,
       id: body.id && body.id.trim() ? body.id : `veh-${Date.now()}`,
       status: body.status ?? 'Available',
       createdAt: new Date().toISOString(),
@@ -91,10 +110,16 @@ async function startServer() {
       return;
     }
     const existing = store.vehicles[index];
+    const mergedTransit = updates.transit
+      ? { ...existing.transit, ...updates.transit }
+      : existing.transit;
+    if (mergedTransit.dealType !== 'balance-release') {
+      delete mergedTransit.etaDate;
+    }
     const updated: ExportVehicle = {
       ...existing,
       ...updates,
-      transit: updates.transit ? { ...existing.transit, ...updates.transit } : existing.transit,
+      transit: mergedTransit,
       inspection: updates.inspection
         ? { ...existing.inspection, ...updates.inspection }
         : existing.inspection,
@@ -144,6 +169,8 @@ async function startServer() {
       shippingMethod: body.shippingMethod || 'RoRo Vessel',
       quotedAmountUsd: Number(body.quotedAmountUsd) || 0,
       notes: body.notes?.trim() || '',
+      leadSource: body.leadSource?.trim() || 'Website Booking Form',
+      crmNotes: body.crmNotes?.trim() || '',
       status: 'Pending Review',
       createdAt: new Date().toISOString(),
     };
@@ -154,16 +181,23 @@ async function startServer() {
 
   app.patch('/api/bookings/:id', (req, res) => {
     const { id } = req.params;
-    const { status } = req.body as { status?: BookingRequest['status'] };
+    const { status, crmNotes } = req.body as {
+      status?: BookingRequest['status'];
+      crmNotes?: string;
+    };
     const store = readStore();
     const index = store.bookings.findIndex((b) => b.id === id);
     if (index === -1) {
       res.status(404).json({ error: 'Booking not found.' });
       return;
     }
+    store.bookings[index] = {
+      ...store.bookings[index],
+      ...(status !== undefined ? { status } : {}),
+      ...(crmNotes !== undefined ? { crmNotes } : {}),
+    };
     if (status) {
-      store.bookings[index] = { ...store.bookings[index], status };
-      // Sync vehicle status when seller confirms deposit or cancels
+      // Sync vehicle status when seller confirms deposit or ships
       const linkedVehicleId = store.bookings[index].vehicleId;
       if (linkedVehicleId) {
         const vIdx = store.vehicles.findIndex((v) => v.id === linkedVehicleId);
@@ -175,9 +209,65 @@ async function startServer() {
           }
         }
       }
-      writeStore(store);
     }
+    writeStore(store);
     res.json({ booking: store.bookings[index], vehicles: store.vehicles });
+  });
+
+  app.delete('/api/bookings/:id', (req, res) => {
+    const { id } = req.params;
+    const store = readStore();
+    const nextBookings = store.bookings.filter((b) => b.id !== id);
+    if (nextBookings.length === store.bookings.length) {
+      res.status(404).json({ error: 'Booking lead not found.' });
+      return;
+    }
+    store.bookings = nextBookings;
+    writeStore(store);
+    res.json({ deletedId: id });
+  });
+
+  // Container Unloading Videos API
+  app.get('/api/videos', (_req, res) => {
+    const store = readStore();
+    res.json({ videos: store.videos });
+  });
+
+  app.post('/api/videos', (req, res) => {
+    const body = req.body as Partial<UnloadingVideo>;
+    if (!body.title || !body.videoUrl) {
+      res.status(400).json({ error: 'title and videoUrl are required.' });
+      return;
+    }
+    const store = readStore();
+    const created: UnloadingVideo = {
+      id: `vid-${Date.now()}`,
+      title: body.title.trim(),
+      portLabel: body.portLabel?.trim() || 'Caribbean Port Terminal',
+      containerType: body.containerType?.trim() || '40ft Container Discharge',
+      vehicleSummary: body.vehicleSummary?.trim() || 'Japanese Export Arrival',
+      videoUrl: body.videoUrl.trim(),
+      posterUrl:
+        body.posterUrl?.trim() || '/src/assets/images/container_unload_suv_1794837300196.jpg',
+      durationLabel: body.durationLabel?.trim() || 'Video',
+      createdAt: new Date().toISOString(),
+    };
+    store.videos = [created, ...store.videos];
+    writeStore(store);
+    res.status(201).json({ video: created });
+  });
+
+  app.delete('/api/videos/:id', (req, res) => {
+    const { id } = req.params;
+    const store = readStore();
+    const nextVideos = store.videos.filter((v) => v.id !== id);
+    if (nextVideos.length === store.videos.length) {
+      res.status(404).json({ error: 'Video not found.' });
+      return;
+    }
+    store.videos = nextVideos;
+    writeStore(store);
+    res.json({ deletedId: id });
   });
 
   // Vite middleware in dev, static dist in production
@@ -196,7 +286,7 @@ async function startServer() {
   }
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`CrownWheel Auto Trade server running on http://0.0.0.0:${PORT}`);
+    console.log(`PJS Ventures server running on http://0.0.0.0:${PORT}`);
   });
 }
 

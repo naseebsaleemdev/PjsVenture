@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AlertCircle, CheckCircle2, Copy } from 'lucide-react';
-import { DESTINATION_PORTS } from '../data/seedInventory.ts';
+import { DESTINATION_PORTS, PORT_REGIONS } from '../data/seedInventory.ts';
 import type { BookingRequest, ExportVehicle } from '../types/autoTrade.ts';
 import type { LockedCifQuote, ShippingMethod } from './CifCalculatorSection';
 import { PageBanner } from './PageBanner';
@@ -22,6 +22,7 @@ interface ImportInquiryFormProps {
     shippingMethod: ShippingMethod;
     quotedAmountUsd: number;
     notes: string;
+    leadSource?: string;
   }) => Promise<BookingRequest>;
 }
 
@@ -135,6 +136,14 @@ export function ImportInquiryForm({
           ? lockedCif.totalPayableUsd
           : 0;
 
+      const leadSource = lockedCif
+        ? 'Freight Calculator Quote'
+        : selectedVehicleForBooking
+          ? selectedVehicleForBooking.transit.dealType === 'balance-release'
+            ? 'Port Balance Claim Form'
+            : 'Vehicle Booking Form'
+          : 'Website Booking Form';
+
       const booking = await onSubmitBooking({
         vehicleId: selectedVehicleForBooking?.id ?? lockedCif?.vehicleId ?? null,
         vehicleTitle,
@@ -143,11 +152,12 @@ export function ImportInquiryForm({
         buyerEmail: email.trim(),
         buyerPhone: phone.trim(),
         destinationPortId: activePort.id,
-        destinationPortName: `${activePort.name}, ${activePort.country}`,
+        destinationPortName: lockedCif?.portName || `${activePort.name}, ${activePort.country}`,
         requestType,
         shippingMethod,
         quotedAmountUsd,
         notes: notes.trim(),
+        leadSource,
       });
       setCreatedBooking(booking);
     } catch (err) {
@@ -160,7 +170,7 @@ export function ImportInquiryForm({
   const handleCopy = async () => {
     if (!createdBooking) return;
     const summary = [
-      `CrownWheel Booking Reference: ${createdBooking.id.toUpperCase()}`,
+      `PJS Ventures Booking Reference: ${createdBooking.id.toUpperCase()}`,
       `Vehicle: ${createdBooking.vehicleTitle} (${createdBooking.chassisCode})`,
       `Buyer: ${createdBooking.buyerName} · ${createdBooking.buyerEmail}`,
       `Port: ${createdBooking.destinationPortName} (${createdBooking.shippingMethod})`,
@@ -178,7 +188,7 @@ export function ImportInquiryForm({
   return (
     <div>
       <PageBanner
-        breadcrumb="CrownWheel · Online Booking & Port Reservation"
+        breadcrumb="PJS Ventures · Online Booking & Port Reservation"
         title="Book your vehicle for Japan-to-Caribbean import."
         subtitle="Reserve any listed yard car or claim an in-transit port balance-release unit. Our export desk prepares your proforma invoice and RoRo shipping schedule."
       />
@@ -206,15 +216,15 @@ export function ImportInquiryForm({
               <div>
                 <div className="font-medium text-zinc-950">Caribbean Desk Email</div>
                 <a
-                  href="mailto:trade@crownwheel.jp"
+                  href="mailto:trade@pjsventures.com"
                   className="text-blue-900 hover:underline underline-offset-4"
                 >
-                  trade@crownwheel.jp
+                  trade@pjsventures.com
                 </a>
               </div>
               <div>
-                <div className="font-medium text-zinc-950">Primary Caribbean Corridors</div>
-                <div>Bahamas · Jamaica · Cayman Islands · Turks & Caicos · St. Lucia</div>
+                <div className="font-medium text-zinc-950">Active Global Corridors</div>
+                <div>Caribbean · East &amp; West Africa · UK &amp; Europe · Asia · Oceania</div>
               </div>
             </div>
           </div>
@@ -381,10 +391,14 @@ export function ImportInquiryForm({
                       onChange={(e) => setDestinationPortId(e.target.value)}
                       className="w-full px-3.5 py-2.5 text-sm rounded-lg border border-slate-300 bg-white text-zinc-950 focus:outline-none focus:ring-2 focus:ring-blue-900/20 focus:border-blue-900"
                     >
-                      {DESTINATION_PORTS.map((port) => (
-                        <option key={port.id} value={port.id}>
-                          {port.name} ({port.country})
-                        </option>
+                      {PORT_REGIONS.map((region) => (
+                        <optgroup key={region} label={region}>
+                          {DESTINATION_PORTS.filter((p) => p.region === region).map((port) => (
+                            <option key={port.id} value={port.id}>
+                              {port.name} ({port.country})
+                            </option>
+                          ))}
+                        </optgroup>
                       ))}
                     </select>
                   </div>

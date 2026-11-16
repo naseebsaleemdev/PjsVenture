@@ -17,16 +17,16 @@ export function Footer({ onNavigate }: FooterProps) {
             }}
             className="font-display text-lg font-bold tracking-tight text-zinc-950"
           >
-            CrownWheel
+            PJS Ventures
           </a>
           <p className="mt-1 text-xs text-slate-500">
-            Yokohama <span aria-hidden="true">·</span> Nassau <span aria-hidden="true">·</span>{' '}
-            Kingston <span aria-hidden="true">·</span> Cayman Islands{' '}
-            <span aria-hidden="true">·</span> trade@crownwheel.jp
+            Yokohama <span aria-hidden="true">·</span> Caribbean <span aria-hidden="true">·</span>{' '}
+            Africa <span aria-hidden="true">·</span> UK &amp; Europe <span aria-hidden="true">·</span>{' '}
+            Oceania <span aria-hidden="true">·</span> trade@pjsventures.com
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-6 text-xs text-slate-600">
+        <div className="flex flex-wrap items-center gap-5 text-xs text-slate-600">
           <a
             href="/inventory"
             onClick={(e) => {
@@ -48,6 +48,16 @@ export function Footer({ onNavigate }: FooterProps) {
             Port Deals
           </a>
           <a
+            href="/markets"
+            onClick={(e) => {
+              e.preventDefault();
+              onNavigate('/markets');
+            }}
+            className="hover:text-zinc-950 transition-colors"
+          >
+            Global Markets
+          </a>
+          <a
             href="/ports"
             onClick={(e) => {
               e.preventDefault();
@@ -55,7 +65,7 @@ export function Footer({ onNavigate }: FooterProps) {
             }}
             className="hover:text-zinc-950 transition-colors"
           >
-            Caribbean Ports
+            Global Ports
           </a>
           <a
             href="/calculator"
@@ -68,16 +78,16 @@ export function Footer({ onNavigate }: FooterProps) {
             CIF Calculator
           </a>
           <a
-            href="/portal"
+            href="/how-to-buy"
             onClick={(e) => {
               e.preventDefault();
-              onNavigate('/portal');
+              onNavigate('/how-to-buy');
             }}
-            className="hover:text-blue-900 transition-colors"
+            className="hover:text-zinc-950 transition-colors"
           >
-            Seller Portal
+            How to Buy
           </a>
-          <span className="text-slate-400">© 2026 CrownWheel Auto Trade</span>
+          <span className="text-slate-400">© 2026 PJS Ventures</span>
         </div>
       </div>
     </footer>
