@@ -14,6 +14,7 @@ import {
   Phone,
   Plus,
   Search,
+  ShieldCheck,
   Trash2,
   Upload,
   Users,
@@ -28,28 +29,35 @@ import {
   getPortTrackingStage,
   getVehicleImages,
 } from '../data/seedInventory.ts';
-import { isValidPortalPassword, savePortalPassword } from '../lib/portalAuth.ts';
+import {
+  clearPortalSession,
+  isValidPortalPassword,
+  readPortalSession,
+  savePortalPassword,
+  writePortalSession,
+} from '../lib/portalAuth.ts';
 import type {
   BookingRequest,
   ExportVehicle,
   ListingMode,
   PortTrackingStage,
+  PortalUser,
   UnloadingVideo,
   VehicleCategory,
   VehicleStatus,
 } from '../types/autoTrade.ts';
 import { PortTrackingProgress } from './PortTrackingProgress';
 import { PortalLoginGate } from './PortalLoginGate';
+import { PortalUsersPanel } from './PortalUsersPanel';
 import { ResilientImage } from './ResilientImage';
 
-const PORTAL_SESSION_KEY = 'pjsventures_portal_auth_v1';
-
-type PortalTab = 'inventory' | 'add-vehicle' | 'bookings' | 'videos';
+type PortalTab = 'inventory' | 'add-vehicle' | 'bookings' | 'videos' | 'users';
 
 interface SellerPortalProps {
   vehicles: ExportVehicle[];
   bookings: BookingRequest[];
   videos: UnloadingVideo[];
+  users: PortalUser[];
   onCreateVehicle: (vehicle: Omit<ExportVehicle, 'id' | 'createdAt'>) => Promise<void>;
   onUpdateVehicle: (id: string, updates: Partial<ExportVehicle>) => Promise<void>;
   onUpdateVehicleStatus: (id: string, status: VehicleStatus) => Promise<void>;
@@ -64,6 +72,9 @@ interface SellerPortalProps {
   onDeleteBooking: (id: string) => Promise<void>;
   onCreateVideo: (video: Omit<UnloadingVideo, 'id' | 'createdAt'>) => Promise<void>;
   onDeleteVideo: (id: string) => Promise<void>;
+  onCreateUser: (user: Omit<PortalUser, 'id' | 'createdAt'>) => Promise<void>;
+  onUpdateUser: (id: string, updates: Partial<PortalUser>) => Promise<void>;
+  onDeleteUser: (id: string) => Promise<void>;
   onExitPortal: () => void;
 }
 
@@ -79,34 +90,6 @@ const CONTAINER_POSTER_PRESETS: { label: string; src: string }[] = [
   {
     label: '40ft Dual Unit Unload',
     src: '/src/assets/images/container_unload_pickup_1794837300966.jpg',
-  },
-];
-
-const IMAGE_PRESETS: { label: string; category: Exclude<VehicleCategory, 'All Stock'>; src: string }[] = [
-  {
-    label: 'Hybrid Hatchback',
-    category: 'Hybrids',
-    src: '/src/assets/images/auto_hybrid_aqua_1794825334004.jpg',
-  },
-  {
-    label: '4x4 Luxury SUV',
-    category: 'SUVs & 4x4',
-    src: '/src/assets/images/auto_suv_prado_1794825333513.jpg',
-  },
-  {
-    label: 'Double-Cab Pickup',
-    category: 'Commercial',
-    src: '/src/assets/images/auto_pickup_hilux_1794825334855.jpg',
-  },
-  {
-    label: 'Executive Sedan',
-    category: 'Sedans',
-    src: '/src/assets/images/auto_sedan_crown_1794825335274.jpg',
-  },
-  {
-    label: 'Commercial Van',
-    category: 'Commercial',
-    src: '/src/assets/images/auto_van_hiace_1794825335037.jpg',
   },
 ];
 
@@ -141,6 +124,7 @@ export function SellerPortal({
   vehicles,
   bookings,
   videos,
+  users,
   onCreateVehicle,
   onUpdateVehicle,
   onUpdateVehicleStatus,
@@ -150,15 +134,26 @@ export function SellerPortal({
   onDeleteBooking,
   onCreateVideo,
   onDeleteVideo,
+  onCreateUser,
+  onUpdateUser,
+  onDeleteUser,
   onExitPortal,
 }: SellerPortalProps) {
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
-    try {
-      return sessionStorage.getItem(PORTAL_SESSION_KEY) === 'authenticated';
-    } catch {
-      return false;
-    }
-  });
+  const [sessionIdentity, setSessionIdentity] = useState<{ id: string; email: string } | null>(
+    () => {
+      const existing = readPortalSession(users);
+      return existing ? { id: existing.id, email: existing.email } : null;
+    },
+  );
+  const currentUser: PortalUser | null = sessionIdentity
+    ? users.find((u) => u.id === sessionIdentity.id) ||
+      users.find(
+        (u) => u.email.trim().toLowerCase() === sessionIdentity.email.trim().toLowerCase(),
+      ) ||
+      readPortalSession(users)
+    : null;
+  const activeUser = currentUser && (currentUser.active || currentUser.isPrimaryOwner) ? currentUser : null;
+
   const [activeTab, setActiveTab] = useState<PortalTab>('inventory');
   const [editingVehicleId, setEditingVehicleId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -217,13 +212,9 @@ export function SellerPortal({
   const [auctionHouse, setAuctionHouse] = useState('USS Tokyo');
   const [grade, setGrade] = useState('4.5');
   const [inspectorSummary, setInspectorSummary] = useState(
-    'Single-owner Japanese unit inspected in Yokohama. Clean exterior panels, verified mileage, ready for Caribbean export.',
+    'Single-owner Japanese unit inspected in Yokohama. Clean exterior panels, verified mileage, ready for worldwide export.',
   );
-  const [galleryImages, setGalleryImages] = useState<string[]>([
-    IMAGE_PRESETS[0].src,
-    '/src/assets/images/auto_hero_showroom_1794825334875.jpg',
-    '/src/assets/images/auto_roro_shipping_1794825335205.jpg',
-  ]);
+  const [galleryImages, setGalleryImages] = useState<string[]>([]);
   const [previewIndex, setPreviewIndex] = useState(0);
   const [customImageUrl, setCustomImageUrl] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
@@ -246,8 +237,8 @@ export function SellerPortal({
   const effectiveDeposit = dealType === 'balance-release' ? Math.max(0, priorDepositUsd) : 0;
   const computedBalanceUsd =
     dealType === 'balance-release'
-      ? Math.max(500, fullCifUsd - effectiveDeposit)
-      : fullCifUsd;
+      ? Math.max(0, fullCifUsd - effectiveDeposit)
+      : Math.max(0, fullCifUsd);
 
   const filteredInventory = vehicles.filter((v) => {
     const matchesMode = modeFilter === 'all' || v.transit.dealType === modeFilter;
@@ -365,22 +356,14 @@ export function SellerPortal({
     URL.revokeObjectURL(url);
   };
 
-  const handleAuthenticated = () => {
-    try {
-      sessionStorage.setItem(PORTAL_SESSION_KEY, 'authenticated');
-    } catch {
-      // Ignore storage failures
-    }
-    setIsAuthenticated(true);
+  const handleAuthenticated = (user: PortalUser) => {
+    writePortalSession(user);
+    setSessionIdentity({ id: user.id, email: user.email });
   };
 
   const handleSignOut = () => {
-    try {
-      sessionStorage.removeItem(PORTAL_SESSION_KEY);
-    } catch {
-      // Ignore storage failures
-    }
-    setIsAuthenticated(false);
+    clearPortalSession();
+    setSessionIdentity(null);
   };
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -390,7 +373,7 @@ export function SellerPortal({
       const compressedList = await Promise.all(files.map((file) => compressImageFile(file)));
       setGalleryImages((prev) => {
         const next = [...prev, ...compressedList];
-        setPreviewIndex(next.length - 1);
+        setPreviewIndex(prev.length === 0 ? 0 : next.length - 1);
         return next;
       });
       setFormError(null);
@@ -407,20 +390,10 @@ export function SellerPortal({
     setGalleryImages((prev) => {
       if (prev.includes(trimmed)) return prev;
       const next = [...prev, trimmed];
-      setPreviewIndex(next.length - 1);
+      setPreviewIndex(prev.length === 0 ? 0 : next.length - 1);
       return next;
     });
     setCustomImageUrl('');
-  };
-
-  const handleAddPresetPhoto = (src: string, presetCategory: Exclude<VehicleCategory, 'All Stock'>) => {
-    setCategory(presetCategory);
-    setGalleryImages((prev) => {
-      const filtered = prev.filter((item) => item !== src);
-      const next = [src, ...filtered];
-      setPreviewIndex(0);
-      return next;
-    });
   };
 
   const handleSetCover = (idx: number) => {
@@ -435,9 +408,8 @@ export function SellerPortal({
 
   const handleRemoveImage = (idx: number) => {
     setGalleryImages((prev) => {
-      if (prev.length <= 1) return prev;
       const next = prev.filter((_, i) => i !== idx);
-      setPreviewIndex((curr) => (curr >= next.length ? Math.max(0, next.length - 1) : curr));
+      setPreviewIndex((curr) => (next.length === 0 ? 0 : curr >= next.length ? next.length - 1 : curr));
       return next;
     });
   };
@@ -474,11 +446,7 @@ export function SellerPortal({
     setInspectorSummary(
       'Single-owner Japanese unit inspected in Yokohama. Clean exterior panels, verified mileage, ready for worldwide export.',
     );
-    setGalleryImages([
-      IMAGE_PRESETS[0].src,
-      '/src/assets/images/auto_hero_showroom_1794825334875.jpg',
-      '/src/assets/images/auto_roro_shipping_1794825335205.jpg',
-    ]);
+    setGalleryImages([]);
     setPreviewIndex(0);
     setCustomImageUrl('');
     setFormError(null);
@@ -519,7 +487,7 @@ export function SellerPortal({
     setPriorDepositUsd(
       vehicle.transit.priorDepositUsd > 0
         ? vehicle.transit.priorDepositUsd
-        : Math.round((vehicle.transit.fullCifUsd * 0.45) / 100) * 100,
+        : Math.round(vehicle.transit.fullCifUsd * 0.45),
     );
     setAuctionHouse(vehicle.inspection.auctionHouse);
     setGrade(vehicle.inspection.overallGrade);
@@ -535,6 +503,10 @@ export function SellerPortal({
     e.preventDefault();
     if (!makeModel.trim() || !chassisCode.trim()) {
       setFormError('Please enter Make & Model and Chassis Code.');
+      return;
+    }
+    if (galleryImages.length === 0) {
+      setFormError('Please upload at least one vehicle photo or paste an image URL.');
       return;
     }
 
@@ -565,8 +537,8 @@ export function SellerPortal({
             : 'Yokohama Yard · Ships Worldwide',
         fobUsd,
         cbm: Math.max(4, Number(cbm) || 11.6),
-        image: galleryImages[0] || IMAGE_PRESETS[0].src,
-        images: galleryImages.length > 0 ? galleryImages : [IMAGE_PRESETS[0].src],
+        image: galleryImages[0],
+        images: galleryImages,
         imageAlt: `${year} ${makeModel.trim()} (${chassisCode.trim().toUpperCase()})`,
         transit: {
           dealType,
@@ -674,14 +646,41 @@ export function SellerPortal({
     }
   };
 
-  if (!isAuthenticated) {
+  if (!activeUser) {
     return (
       <PortalLoginGate
+        users={users}
         onAuthenticated={handleAuthenticated}
+        onSyncOwnerPassword={async (userId, nextPw) => {
+          await onUpdateUser(userId, { password: nextPw });
+        }}
         onExitPortal={onExitPortal}
       />
     );
   }
+
+  const perms = activeUser.permissions;
+
+  const isTabAllowed = (tab: PortalTab): boolean => {
+    if (tab === 'inventory') return perms.inventoryRead;
+    if (tab === 'add-vehicle') return perms.inventoryWrite;
+    if (tab === 'bookings') return perms.bookingsRead;
+    if (tab === 'videos') return perms.videosManage;
+    if (tab === 'users') return perms.usersManage;
+    return false;
+  };
+
+  const fallbackAllowedTab: PortalTab = perms.inventoryRead
+    ? 'inventory'
+    : perms.bookingsRead
+      ? 'bookings'
+      : perms.videosManage
+        ? 'videos'
+        : perms.usersManage
+          ? 'users'
+          : 'inventory';
+
+  const effectiveTab: PortalTab = isTabAllowed(activeTab) ? activeTab : fallbackAllowedTab;
 
   const safePreviewIndex = previewIndex < galleryImages.length ? previewIndex : 0;
 
@@ -696,71 +695,113 @@ export function SellerPortal({
             </span>
           </div>
 
+          <div className="mx-4 mt-4 p-3 rounded-lg bg-slate-50 border border-slate-200">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-semibold text-zinc-950 truncate">
+                {activeUser.name}
+              </span>
+              <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-blue-50 text-blue-900 border border-blue-200 shrink-0">
+                {activeUser.role}
+              </span>
+            </div>
+            <div className="text-[11px] font-mono text-slate-500 truncate mt-0.5">
+              {activeUser.email}
+            </div>
+          </div>
+
           <nav aria-label="Seller Portal Navigation" className="p-4 space-y-1">
-            <button
-              type="button"
-              onClick={() => setActiveTab('inventory')}
-              className={`w-full flex items-center gap-3 px-3.5 py-2.5 text-sm font-medium rounded-lg transition-colors cursor-pointer ${
-                activeTab === 'inventory'
-                  ? 'bg-blue-50 text-blue-900'
-                  : 'text-slate-600 hover:bg-slate-50 hover:text-zinc-950'
-              }`}
-            >
-              <Car className="w-4 h-4 shrink-0" aria-hidden="true" />
-              <span>Inventory ({vehicles.length})</span>
-            </button>
+            {perms.inventoryRead && (
+              <button
+                type="button"
+                onClick={() => setActiveTab('inventory')}
+                className={`w-full flex items-center gap-3 px-3.5 py-2.5 text-sm font-medium rounded-lg transition-colors cursor-pointer ${
+                  effectiveTab === 'inventory'
+                    ? 'bg-blue-50 text-blue-900'
+                    : 'text-slate-600 hover:bg-slate-50 hover:text-zinc-950'
+                }`}
+              >
+                <Car className="w-4 h-4 shrink-0" aria-hidden="true" />
+                <span>Inventory ({vehicles.length})</span>
+              </button>
+            )}
 
-            <button
-              type="button"
-              onClick={() => {
-                resetFormForNew();
-                setActiveTab('add-vehicle');
-              }}
-              className={`w-full flex items-center gap-3 px-3.5 py-2.5 text-sm font-medium rounded-lg transition-colors cursor-pointer ${
-                activeTab === 'add-vehicle'
-                  ? 'bg-blue-50 text-blue-900'
-                  : 'text-slate-600 hover:bg-slate-50 hover:text-zinc-950'
-              }`}
-            >
-              <Plus className="w-4 h-4 shrink-0" aria-hidden="true" />
-              <span>{editingVehicleId ? 'Edit Vehicle' : 'Add New Car'}</span>
-            </button>
+            {perms.inventoryWrite && (
+              <button
+                type="button"
+                onClick={() => {
+                  resetFormForNew();
+                  setActiveTab('add-vehicle');
+                }}
+                className={`w-full flex items-center gap-3 px-3.5 py-2.5 text-sm font-medium rounded-lg transition-colors cursor-pointer ${
+                  effectiveTab === 'add-vehicle'
+                    ? 'bg-blue-50 text-blue-900'
+                    : 'text-slate-600 hover:bg-slate-50 hover:text-zinc-950'
+                }`}
+              >
+                <Plus className="w-4 h-4 shrink-0" aria-hidden="true" />
+                <span>{editingVehicleId ? 'Edit Vehicle' : 'Add New Car'}</span>
+              </button>
+            )}
 
-            <button
-              type="button"
-              onClick={() => setActiveTab('bookings')}
-              className={`w-full flex items-center justify-between px-3.5 py-2.5 text-sm font-medium rounded-lg transition-colors cursor-pointer ${
-                activeTab === 'bookings'
-                  ? 'bg-blue-50 text-blue-900'
-                  : 'text-slate-600 hover:bg-slate-50 hover:text-zinc-950'
-              }`}
-            >
-              <span className="flex items-center gap-3">
-                <Users className="w-4 h-4 shrink-0" aria-hidden="true" />
-                <span>Leads &amp; CRM</span>
-              </span>
-              <span className="font-mono text-xs tabular-nums text-slate-500">
-                {bookings.length}
-              </span>
-            </button>
+            {perms.bookingsRead && (
+              <button
+                type="button"
+                onClick={() => setActiveTab('bookings')}
+                className={`w-full flex items-center justify-between px-3.5 py-2.5 text-sm font-medium rounded-lg transition-colors cursor-pointer ${
+                  effectiveTab === 'bookings'
+                    ? 'bg-blue-50 text-blue-900'
+                    : 'text-slate-600 hover:bg-slate-50 hover:text-zinc-950'
+                }`}
+              >
+                <span className="flex items-center gap-3">
+                  <Users className="w-4 h-4 shrink-0" aria-hidden="true" />
+                  <span>Leads &amp; CRM</span>
+                </span>
+                <span className="font-mono text-xs tabular-nums text-slate-500">
+                  {bookings.length}
+                </span>
+              </button>
+            )}
 
-            <button
-              type="button"
-              onClick={() => setActiveTab('videos')}
-              className={`w-full flex items-center justify-between px-3.5 py-2.5 text-sm font-medium rounded-lg transition-colors cursor-pointer ${
-                activeTab === 'videos'
-                  ? 'bg-blue-50 text-blue-900'
-                  : 'text-slate-600 hover:bg-slate-50 hover:text-zinc-950'
-              }`}
-            >
-              <span className="flex items-center gap-3">
-                <Film className="w-4 h-4 shrink-0" aria-hidden="true" />
-                <span>Unloading Videos</span>
-              </span>
-              <span className="font-mono text-xs tabular-nums text-slate-500">
-                {videos.length}
-              </span>
-            </button>
+            {perms.videosManage && (
+              <button
+                type="button"
+                onClick={() => setActiveTab('videos')}
+                className={`w-full flex items-center justify-between px-3.5 py-2.5 text-sm font-medium rounded-lg transition-colors cursor-pointer ${
+                  effectiveTab === 'videos'
+                    ? 'bg-blue-50 text-blue-900'
+                    : 'text-slate-600 hover:bg-slate-50 hover:text-zinc-950'
+                }`}
+              >
+                <span className="flex items-center gap-3">
+                  <Film className="w-4 h-4 shrink-0" aria-hidden="true" />
+                  <span>Unloading Videos</span>
+                </span>
+                <span className="font-mono text-xs tabular-nums text-slate-500">
+                  {videos.length}
+                </span>
+              </button>
+            )}
+
+            {perms.usersManage && (
+              <button
+                type="button"
+                onClick={() => setActiveTab('users')}
+                className={`w-full flex items-center justify-between px-3.5 py-2.5 text-sm font-medium rounded-lg transition-colors cursor-pointer ${
+                  effectiveTab === 'users'
+                    ? 'bg-blue-50 text-blue-900'
+                    : 'text-slate-600 hover:bg-slate-50 hover:text-zinc-950'
+                }`}
+              >
+                <span className="flex items-center gap-3">
+                  <ShieldCheck className="w-4 h-4 shrink-0" aria-hidden="true" />
+                  <span>Team &amp; Users</span>
+                </span>
+                <span className="font-mono text-xs tabular-nums text-slate-500">
+                  {users.length}
+                </span>
+              </button>
+            )}
           </nav>
         </div>
 
@@ -811,19 +852,21 @@ export function SellerPortal({
               /
             </span>
             <span className="font-medium text-zinc-950">
-              {activeTab === 'inventory'
+              {effectiveTab === 'inventory'
                 ? 'Vehicle Inventory'
-                : activeTab === 'add-vehicle'
+                : effectiveTab === 'add-vehicle'
                   ? editingVehicleId
                     ? 'Edit Vehicle'
                     : 'Publish New Vehicle'
-                  : activeTab === 'videos'
+                  : effectiveTab === 'videos'
                     ? 'Container Unloading Videos'
-                    : 'Form Leads & Client CRM'}
+                    : effectiveTab === 'users'
+                      ? 'Team Users & Permissions'
+                      : 'Form Leads & Client CRM'}
             </span>
           </div>
 
-          {activeTab !== 'add-vehicle' && (
+          {effectiveTab !== 'add-vehicle' && perms.inventoryWrite && (
             <button
               type="button"
               onClick={() => {
@@ -859,21 +902,30 @@ export function SellerPortal({
                 {balanceCount}
               </div>
             </div>
-            <button
-              type="button"
-              onClick={() => setActiveTab('bookings')}
-              className="bg-white border border-slate-200 hover:border-blue-900 rounded-xl p-5 text-left transition-colors cursor-pointer"
-            >
-              <div className="text-xs text-slate-500">Form Leads CRM ({bookings.length})</div>
-              <div className="mt-1 font-mono text-2xl font-semibold text-zinc-950 tabular-nums">
-                {pendingBookingsCount}{' '}
-                <span className="text-xs font-sans font-normal text-blue-900">pending review</span>
+            {perms.bookingsRead ? (
+              <button
+                type="button"
+                onClick={() => setActiveTab('bookings')}
+                className="bg-white border border-slate-200 hover:border-blue-900 rounded-xl p-5 text-left transition-colors cursor-pointer"
+              >
+                <div className="text-xs text-slate-500">Form Leads CRM ({bookings.length})</div>
+                <div className="mt-1 font-mono text-2xl font-semibold text-zinc-950 tabular-nums">
+                  {pendingBookingsCount}{' '}
+                  <span className="text-xs font-sans font-normal text-blue-900">pending review</span>
+                </div>
+              </button>
+            ) : (
+              <div className="bg-white border border-slate-200 rounded-xl p-5">
+                <div className="text-xs text-slate-500">Your Access Role</div>
+                <div className="mt-1 font-display text-xl font-semibold text-zinc-950">
+                  {activeUser.role}
+                </div>
               </div>
-            </button>
+            )}
           </div>
 
           {/* TAB 1: INVENTORY TABLE */}
-          {activeTab === 'inventory' && (
+          {effectiveTab === 'inventory' && perms.inventoryRead && (
             <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
               <div className="p-5 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div className="inline-flex items-center gap-1 p-1 bg-slate-100 rounded-lg self-start">
@@ -917,13 +969,15 @@ export function SellerPortal({
               {filteredInventory.length === 0 ? (
                 <div className="p-10 text-center space-y-3">
                   <p className="text-sm text-slate-600">No vehicles match your current filter.</p>
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('add-vehicle')}
-                    className="px-4 py-2 text-sm font-medium text-white bg-blue-900 rounded-lg cursor-pointer"
-                  >
-                    Add Your First Vehicle
-                  </button>
+                  {perms.inventoryWrite && (
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('add-vehicle')}
+                      className="px-4 py-2 text-sm font-medium text-white bg-blue-900 rounded-lg cursor-pointer"
+                    >
+                      Add Your First Vehicle
+                    </button>
+                  )}
                 </div>
               ) : (
                 <div className="overflow-x-auto">
@@ -931,10 +985,12 @@ export function SellerPortal({
                     <thead>
                       <tr className="border-b border-slate-200 bg-slate-50 text-xs font-medium text-slate-500">
                         <th className="py-3 px-4">Vehicle</th>
-                        <th className="py-3 px-4">Type & Port</th>
+                        <th className="py-3 px-4">Type &amp; Port</th>
                         <th className="py-3 px-4 text-right">CIF / Balance Due</th>
                         <th className="py-3 px-4">Status</th>
-                        <th className="py-3 px-4 text-right">Actions</th>
+                        {(perms.inventoryWrite || perms.inventoryDelete) && (
+                          <th className="py-3 px-4 text-right">Actions</th>
+                        )}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 text-sm">
@@ -974,42 +1030,44 @@ export function SellerPortal({
                               {isBal && (
                                 <div className="mt-2 space-y-2">
                                   <PortTrackingProgress transit={vehicle.transit} variant="compact" />
-                                  <select
-                                    aria-label={`Tracking stage for ${vehicle.makeModel}`}
-                                    value={getPortTrackingStage(vehicle.transit)}
-                                    onChange={(e) => {
-                                      const nextStage = e.target.value as PortTrackingStage;
-                                      const portShort = vehicle.transit.destinationPortLabel;
-                                      const stageNote =
-                                        nextStage === 'In Transit'
-                                          ? `En Route to ${portShort}`
-                                          : nextStage === 'At Port'
-                                            ? `Arrived & Docked at ${portShort}`
-                                            : nextStage === 'Customs Clearing'
-                                              ? `B/L Endorsed · Customs Clearing at ${portShort}`
-                                              : `Cleared · Ready for Pickup at ${portShort}`;
-                                      onUpdateVehicle(vehicle.id, {
-                                        status:
-                                          nextStage === 'Ready for Pickup'
-                                            ? 'Available'
-                                            : nextStage === 'In Transit'
-                                              ? 'In Transit'
-                                              : vehicle.status,
-                                        transit: {
-                                          ...vehicle.transit,
-                                          trackingStage: nextStage,
-                                          arrivalStatus: stageNote,
-                                        },
-                                      });
-                                    }}
-                                    className="w-full px-2 py-1 text-[11px] font-medium rounded border border-blue-200 bg-blue-50/70 text-blue-900 cursor-pointer"
-                                  >
-                                    {PORT_TRACKING_STAGES.map((stage) => (
-                                      <option key={stage} value={stage}>
-                                        Tracker: {stage}
-                                      </option>
-                                    ))}
-                                  </select>
+                                  {perms.inventoryWrite && (
+                                    <select
+                                      aria-label={`Tracking stage for ${vehicle.makeModel}`}
+                                      value={getPortTrackingStage(vehicle.transit)}
+                                      onChange={(e) => {
+                                        const nextStage = e.target.value as PortTrackingStage;
+                                        const portShort = vehicle.transit.destinationPortLabel;
+                                        const stageNote =
+                                          nextStage === 'In Transit'
+                                            ? `En Route to ${portShort}`
+                                            : nextStage === 'At Port'
+                                              ? `Arrived & Docked at ${portShort}`
+                                              : nextStage === 'Customs Clearing'
+                                                ? `B/L Endorsed · Customs Clearing at ${portShort}`
+                                                : `Cleared · Ready for Pickup at ${portShort}`;
+                                        onUpdateVehicle(vehicle.id, {
+                                          status:
+                                            nextStage === 'Ready for Pickup'
+                                              ? 'Available'
+                                              : nextStage === 'In Transit'
+                                                ? 'In Transit'
+                                                : vehicle.status,
+                                          transit: {
+                                            ...vehicle.transit,
+                                            trackingStage: nextStage,
+                                            arrivalStatus: stageNote,
+                                          },
+                                        });
+                                      }}
+                                      className="w-full px-2 py-1 text-[11px] font-medium rounded border border-blue-200 bg-blue-50/70 text-blue-900 cursor-pointer"
+                                    >
+                                      {PORT_TRACKING_STAGES.map((stage) => (
+                                        <option key={stage} value={stage}>
+                                          Tracker: {stage}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  )}
                                 </div>
                               )}
                             </td>
@@ -1026,45 +1084,57 @@ export function SellerPortal({
                             </td>
 
                             <td className="py-3 px-4">
-                              <select
-                                aria-label={`Status for ${vehicle.makeModel}`}
-                                value={vehicle.status}
-                                onChange={(e) =>
-                                  onUpdateVehicleStatus(
-                                    vehicle.id,
-                                    e.target.value as VehicleStatus,
-                                  )
-                                }
-                                className="px-2.5 py-1.5 text-xs font-medium rounded-md border border-slate-200 bg-white text-zinc-950"
-                              >
-                                <option value="Available">Available</option>
-                                <option value="Booked">Booked</option>
-                                <option value="In Transit">In Transit</option>
-                                <option value="Cleared">Cleared</option>
-                              </select>
+                              {perms.inventoryWrite ? (
+                                <select
+                                  aria-label={`Status for ${vehicle.makeModel}`}
+                                  value={vehicle.status}
+                                  onChange={(e) =>
+                                    onUpdateVehicleStatus(
+                                      vehicle.id,
+                                      e.target.value as VehicleStatus,
+                                    )
+                                  }
+                                  className="px-2.5 py-1.5 text-xs font-medium rounded-md border border-slate-200 bg-white text-zinc-950"
+                                >
+                                  <option value="Available">Available</option>
+                                  <option value="Booked">Booked</option>
+                                  <option value="In Transit">In Transit</option>
+                                  <option value="Cleared">Cleared</option>
+                                </select>
+                              ) : (
+                                <span className="inline-block px-2.5 py-1 text-xs font-medium rounded-md border border-slate-200 bg-slate-50 text-slate-700">
+                                  {vehicle.status}
+                                </span>
+                              )}
                             </td>
 
-                            <td className="py-3 px-4 text-right">
-                              <div className="inline-flex items-center justify-end gap-1">
-                                <button
-                                  type="button"
-                                  onClick={() => startEditVehicle(vehicle)}
-                                  aria-label={`Edit ${vehicle.makeModel}`}
-                                  className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-blue-900 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
-                                >
-                                  <Pencil className="w-3.5 h-3.5" aria-hidden="true" />
-                                  <span>Edit</span>
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => onDeleteVehicle(vehicle.id)}
-                                  aria-label={`Delete ${vehicle.makeModel}`}
-                                  className="p-2 text-slate-400 hover:text-red-700 rounded-lg hover:bg-red-50 transition-colors cursor-pointer"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
-                              </div>
-                            </td>
+                            {(perms.inventoryWrite || perms.inventoryDelete) && (
+                              <td className="py-3 px-4 text-right">
+                                <div className="inline-flex items-center justify-end gap-1">
+                                  {perms.inventoryWrite && (
+                                    <button
+                                      type="button"
+                                      onClick={() => startEditVehicle(vehicle)}
+                                      aria-label={`Edit ${vehicle.makeModel}`}
+                                      className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-blue-900 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+                                    >
+                                      <Pencil className="w-3.5 h-3.5" aria-hidden="true" />
+                                      <span>Edit</span>
+                                    </button>
+                                  )}
+                                  {perms.inventoryDelete && (
+                                    <button
+                                      type="button"
+                                      onClick={() => onDeleteVehicle(vehicle.id)}
+                                      aria-label={`Delete ${vehicle.makeModel}`}
+                                      className="p-2 text-slate-400 hover:text-red-700 rounded-lg hover:bg-red-50 transition-colors cursor-pointer"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </button>
+                                  )}
+                                </div>
+                              </td>
+                            )}
                           </tr>
                         );
                       })}
@@ -1076,7 +1146,7 @@ export function SellerPortal({
           )}
 
           {/* TAB 2: ADD / EDIT CAR FORM */}
-          {activeTab === 'add-vehicle' && (
+          {effectiveTab === 'add-vehicle' && perms.inventoryWrite && (
             <form
               onSubmit={handleSaveVehicleSubmit}
               className="bg-white border border-slate-200 rounded-xl p-6 sm:p-8 space-y-6"
@@ -1091,7 +1161,7 @@ export function SellerPortal({
                   <p className="text-sm text-slate-600 mt-1">
                     {editingVehicleId
                       ? 'Update any specs, photos, price, or switch this car between Direct Japan Import and Port Balance-Release.'
-                      : 'Publish a standard car for direct Japan-to-Caribbean booking, or list an in-transit Port Balance-Release unit.'}
+                      : 'Publish a standard car for direct Japan-to-worldwide booking, or list an in-transit Port Balance-Release unit.'}
                   </p>
                 </div>
                 {editingVehicleId && (
@@ -1118,12 +1188,25 @@ export function SellerPortal({
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
                 <div className="lg:col-span-5 space-y-3">
                   <div className="relative aspect-[4/3] rounded-xl overflow-hidden border border-slate-200 bg-slate-100">
-                    <ResilientImage
-                      src={galleryImages[safePreviewIndex] || IMAGE_PRESETS[0].src}
-                      alt={`Vehicle preview ${safePreviewIndex + 1}`}
-                      fallbackTitle="Vehicle Preview"
-                      className="w-full h-full object-cover"
-                    />
+                    {galleryImages.length > 0 ? (
+                      <ResilientImage
+                        src={galleryImages[safePreviewIndex]}
+                        alt={`Vehicle preview ${safePreviewIndex + 1}`}
+                        fallbackTitle="Vehicle Preview"
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center text-slate-500 space-y-2">
+                        <Upload className="w-7 h-7 text-slate-400" aria-hidden="true" />
+                        <div className="text-xs font-medium text-zinc-950">
+                          No photos selected yet
+                        </div>
+                        <p className="text-[11px] leading-relaxed max-w-[240px]">
+                          Upload your own photos or paste an image URL below. Your chosen cover
+                          becomes the Feature image.
+                        </p>
+                      </div>
+                    )}
                     {galleryImages.length > 1 && (
                       <>
                         <button
@@ -1156,38 +1239,42 @@ export function SellerPortal({
                   </div>
 
                   {/* Gallery Thumbnails */}
-                  <div>
-                    <div className="flex items-center justify-between text-[11px] text-slate-500 mb-1.5">
-                      <span>Carousel Gallery ({galleryImages.length} photos)</span>
-                      <span>Click photo to set Cover</span>
-                    </div>
-                    <div className="grid grid-cols-4 gap-2">
-                      {galleryImages.map((imgSrc, idx) => (
-                        <div
-                          key={`${imgSrc}-${idx}`}
-                          className={`relative aspect-[4/3] rounded-lg overflow-hidden border ${
-                            idx === 0 ? 'border-blue-900 ring-2 ring-blue-900/20' : 'border-slate-200'
-                          }`}
-                        >
-                          <button
-                            type="button"
-                            onClick={() => handleSetCover(idx)}
-                            title={idx === 0 ? 'Primary Cover' : 'Click to make Primary Cover'}
-                            className="w-full h-full block cursor-pointer"
+                  {galleryImages.length > 0 && (
+                    <div>
+                      <div className="flex items-center justify-between text-[11px] text-slate-500 mb-1.5">
+                        <span>Carousel Gallery ({galleryImages.length} photos)</span>
+                        <span>Click any photo to make Feature</span>
+                      </div>
+                      <div className="grid grid-cols-4 gap-2">
+                        {galleryImages.map((imgSrc, idx) => (
+                          <div
+                            key={`${imgSrc}-${idx}`}
+                            className={`relative aspect-[4/3] rounded-lg overflow-hidden border ${
+                              idx === 0 ? 'border-blue-900 ring-2 ring-blue-900/20' : 'border-slate-200'
+                            }`}
                           >
-                            <ResilientImage
-                              src={imgSrc}
-                              alt={`Gallery item ${idx + 1}`}
-                              fallbackTitle="Photo"
-                              className="w-full h-full object-cover"
-                            />
-                          </button>
-                          {idx === 0 && (
-                            <span className="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-blue-900 text-white text-[10px] font-medium">
-                              Cover
+                            <button
+                              type="button"
+                              onClick={() => handleSetCover(idx)}
+                              title={idx === 0 ? 'Primary Feature Image' : 'Click to make Feature Image'}
+                              className="w-full h-full block cursor-pointer"
+                            >
+                              <ResilientImage
+                                src={imgSrc}
+                                alt={`Gallery item ${idx + 1}`}
+                                fallbackTitle="Photo"
+                                className="w-full h-full object-cover"
+                              />
+                            </button>
+                            <span
+                              className={`absolute bottom-1 left-1 px-1.5 py-0.5 rounded text-[10px] font-medium pointer-events-none ${
+                                idx === 0
+                                  ? 'bg-blue-900 text-white'
+                                  : 'bg-zinc-950/70 text-white'
+                              }`}
+                            >
+                              {idx === 0 ? 'Feature' : 'Set Feature'}
                             </span>
-                          )}
-                          {galleryImages.length > 1 && (
                             <button
                               type="button"
                               onClick={() => handleRemoveImage(idx)}
@@ -1196,11 +1283,11 @@ export function SellerPortal({
                             >
                               <X className="w-3 h-3" aria-hidden="true" />
                             </button>
-                          )}
-                        </div>
-                      ))}
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  </div>
+                  )}
 
                   <label className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-medium text-zinc-950 bg-slate-100 hover:bg-slate-200 rounded-lg cursor-pointer transition-colors">
                     <Upload className="w-4 h-4" aria-hidden="true" />
@@ -1230,26 +1317,6 @@ export function SellerPortal({
                       Add
                     </button>
                   </div>
-
-                  <div>
-                    <div className="text-[11px] text-slate-500 mb-1.5">Add studio preset angle:</div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {IMAGE_PRESETS.map((preset) => (
-                        <button
-                          key={preset.label}
-                          type="button"
-                          onClick={() => handleAddPresetPhoto(preset.src, preset.category)}
-                          className={`px-2.5 py-1 text-[11px] rounded border cursor-pointer ${
-                            galleryImages[0] === preset.src
-                              ? 'border-blue-900 bg-blue-50 text-blue-900 font-medium'
-                              : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-                          }`}
-                        >
-                          {preset.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
                 </div>
 
                 <div className="lg:col-span-7 space-y-5">
@@ -1270,7 +1337,7 @@ export function SellerPortal({
                               prev === 'Next Weekly RoRo Sailing' ? 'MV Hoegh Trigger' : prev,
                             );
                             if (priorDepositUsd <= 0) {
-                              setPriorDepositUsd(Math.round((fullCifUsd * 0.45) / 100) * 100);
+                              setPriorDepositUsd(Math.round(fullCifUsd * 0.45));
                             }
                           } else {
                             setVehicleStatus('Available');
@@ -1649,11 +1716,12 @@ export function SellerPortal({
                       </label>
                       <input
                         type="number"
-                        min={1000}
-                        step={100}
-                        value={fobUsd}
+                        min={0}
+                        step={1}
+                        value={fobUsd === 0 ? '' : fobUsd}
                         onChange={(e) => {
-                          const nextFob = Number(e.target.value);
+                          const raw = e.target.value;
+                          const nextFob = raw === '' ? 0 : Math.max(0, Math.round(Number(raw) || 0));
                           setFobUsd(nextFob);
                           setFullCifUsd(nextFob + selectedPort.roroUsd);
                         }}
@@ -1666,10 +1734,13 @@ export function SellerPortal({
                       </label>
                       <input
                         type="number"
-                        min={1500}
-                        step={100}
-                        value={fullCifUsd}
-                        onChange={(e) => setFullCifUsd(Number(e.target.value))}
+                        min={0}
+                        step={1}
+                        value={fullCifUsd === 0 ? '' : fullCifUsd}
+                        onChange={(e) => {
+                          const raw = e.target.value;
+                          setFullCifUsd(raw === '' ? 0 : Math.max(0, Math.round(Number(raw) || 0)));
+                        }}
                         className="w-full px-3 py-2 text-sm font-mono rounded-lg border border-slate-300"
                       />
                     </div>
@@ -1682,9 +1753,14 @@ export function SellerPortal({
                         <input
                           type="number"
                           min={0}
-                          step={100}
-                          value={priorDepositUsd}
-                          onChange={(e) => setPriorDepositUsd(Number(e.target.value))}
+                          step={1}
+                          value={priorDepositUsd === 0 ? '' : priorDepositUsd}
+                          onChange={(e) => {
+                            const raw = e.target.value;
+                            setPriorDepositUsd(
+                              raw === '' ? 0 : Math.max(0, Math.round(Number(raw) || 0)),
+                            );
+                          }}
                           className="w-full px-3 py-2 text-sm font-mono rounded-lg border border-slate-300"
                         />
                       </div>
@@ -1784,7 +1860,7 @@ export function SellerPortal({
           )}
 
           {/* TAB 3: FORM LEADS & CLIENT CRM */}
-          {activeTab === 'bookings' && (
+          {effectiveTab === 'bookings' && perms.bookingsRead && (
             <div className="space-y-5">
               <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -1800,14 +1876,16 @@ export function SellerPortal({
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => setShowManualLeadForm((prev) => !prev)}
-                      className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium text-white bg-blue-900 hover:bg-blue-950 rounded-lg cursor-pointer"
-                    >
-                      <Plus className="w-3.5 h-3.5" aria-hidden="true" />
-                      <span>{showManualLeadForm ? 'Close Lead Form' : 'Add Manual Lead'}</span>
-                    </button>
+                    {perms.bookingsWrite && (
+                      <button
+                        type="button"
+                        onClick={() => setShowManualLeadForm((prev) => !prev)}
+                        className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium text-white bg-blue-900 hover:bg-blue-950 rounded-lg cursor-pointer"
+                      >
+                        <Plus className="w-3.5 h-3.5" aria-hidden="true" />
+                        <span>{showManualLeadForm ? 'Close Lead Form' : 'Add Manual Lead'}</span>
+                      </button>
+                    )}
 
                     <button
                       type="button"
@@ -1821,7 +1899,7 @@ export function SellerPortal({
                   </div>
                 </div>
 
-                {showManualLeadForm && (
+                {showManualLeadForm && perms.bookingsWrite && (
                   <form
                     onSubmit={handleCreateManualLeadSubmit}
                     className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3"
@@ -2061,33 +2139,41 @@ export function SellerPortal({
                               <label className="block text-[11px] font-medium text-slate-500 mb-1">
                                 Pipeline Stage
                               </label>
-                              <select
-                                aria-label={`CRM stage for ${lead.buyerName}`}
-                                value={lead.status}
-                                onChange={(e) =>
-                                  onUpdateBooking(lead.id, {
-                                    status: e.target.value as BookingRequest['status'],
-                                  })
-                                }
-                                className="w-full px-3 py-2 text-xs font-medium rounded-lg border border-slate-300 bg-white text-zinc-950"
-                              >
-                                <option value="Pending Review">Pending Review</option>
-                                <option value="Contacted">Contacted</option>
-                                <option value="Deposit Confirmed">Deposit Confirmed</option>
-                                <option value="Shipped / B/L Issued">Shipped / B/L Issued</option>
-                                <option value="Cancelled">Cancelled</option>
-                              </select>
+                              {perms.bookingsWrite ? (
+                                <select
+                                  aria-label={`CRM stage for ${lead.buyerName}`}
+                                  value={lead.status}
+                                  onChange={(e) =>
+                                    onUpdateBooking(lead.id, {
+                                      status: e.target.value as BookingRequest['status'],
+                                    })
+                                  }
+                                  className="w-full px-3 py-2 text-xs font-medium rounded-lg border border-slate-300 bg-white text-zinc-950"
+                                >
+                                  <option value="Pending Review">Pending Review</option>
+                                  <option value="Contacted">Contacted</option>
+                                  <option value="Deposit Confirmed">Deposit Confirmed</option>
+                                  <option value="Shipped / B/L Issued">Shipped / B/L Issued</option>
+                                  <option value="Cancelled">Cancelled</option>
+                                </select>
+                              ) : (
+                                <div className="px-3 py-2 text-xs font-medium rounded-lg border border-slate-200 bg-slate-50 text-slate-700">
+                                  {lead.status}
+                                </div>
+                              )}
                             </div>
 
-                            <button
-                              type="button"
-                              onClick={() => onDeleteBooking(lead.id)}
-                              aria-label={`Delete lead ${lead.buyerName}`}
-                              className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
-                              <span>Delete Lead</span>
-                            </button>
+                            {perms.bookingsDelete && (
+                              <button
+                                type="button"
+                                onClick={() => onDeleteBooking(lead.id)}
+                                aria-label={`Delete lead ${lead.buyerName}`}
+                                className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
+                                <span>Delete Lead</span>
+                              </button>
+                            )}
                           </div>
                         </div>
 
@@ -2096,6 +2182,7 @@ export function SellerPortal({
                           <input
                             type="text"
                             aria-label={`Follow-up note for ${lead.buyerName}`}
+                            readOnly={!perms.bookingsWrite}
                             value={currentNoteDraft}
                             onChange={(e) =>
                               setCrmNotesDrafts((prev) => ({
@@ -2103,17 +2190,23 @@ export function SellerPortal({
                                 [lead.id]: e.target.value,
                               }))
                             }
-                            placeholder="Add private CRM follow-up note (e.g. Sent proforma invoice on WhatsApp, waiting TT copy...)"
+                            placeholder={
+                              perms.bookingsWrite
+                                ? 'Add private CRM follow-up note (e.g. Sent proforma invoice on WhatsApp, waiting TT copy...)'
+                                : 'No internal follow-up notes'
+                            }
                             className="flex-1 px-3 py-2 text-xs rounded-lg border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:border-blue-900"
                           />
-                          <button
-                            type="button"
-                            disabled={!hasNoteChanges || savingNoteId === lead.id}
-                            onClick={() => handleSaveCrmNote(lead.id, lead.crmNotes || '')}
-                            className="px-4 py-2 text-xs font-medium rounded-lg bg-zinc-950 text-white hover:bg-zinc-800 disabled:bg-slate-200 disabled:text-slate-500 transition-colors cursor-pointer shrink-0"
-                          >
-                            {savingNoteId === lead.id ? 'Saving...' : 'Save CRM Note'}
-                          </button>
+                          {perms.bookingsWrite && (
+                            <button
+                              type="button"
+                              disabled={!hasNoteChanges || savingNoteId === lead.id}
+                              onClick={() => handleSaveCrmNote(lead.id, lead.crmNotes || '')}
+                              className="px-4 py-2 text-xs font-medium rounded-lg bg-zinc-950 text-white hover:bg-zinc-800 disabled:bg-slate-200 disabled:text-slate-500 transition-colors cursor-pointer shrink-0"
+                            >
+                              {savingNoteId === lead.id ? 'Saving...' : 'Save CRM Note'}
+                            </button>
+                          )}
                         </div>
                       </div>
                     );
@@ -2124,7 +2217,7 @@ export function SellerPortal({
           )}
 
           {/* TAB 4: CONTAINER UNLOADING VIDEOS */}
-          {activeTab === 'videos' && (
+          {effectiveTab === 'videos' && perms.videosManage && (
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
               <form
                 onSubmit={handleSaveVideoSubmit}
@@ -2344,6 +2437,16 @@ export function SellerPortal({
               </div>
             </div>
           )}
+          {/* TAB 5: TEAM USERS & RBAC PERMISSIONS */}
+          {effectiveTab === 'users' && perms.usersManage && (
+            <PortalUsersPanel
+              users={users}
+              currentUserId={activeUser.id}
+              onCreateUser={onCreateUser}
+              onUpdateUser={onUpdateUser}
+              onDeleteUser={onDeleteUser}
+            />
+          )}
         </div>
       </div>
 
@@ -2364,7 +2467,7 @@ export function SellerPortal({
               <div className="flex items-center gap-2.5">
                 <KeyRound className="w-4 h-4 text-blue-900" aria-hidden="true" />
                 <h2 className="font-display text-base font-semibold text-zinc-950">
-                  Change CRM &amp; Portal Password
+                  Change Your Password
                 </h2>
               </div>
               <button
@@ -2389,9 +2492,12 @@ export function SellerPortal({
             )}
 
             <form
-              onSubmit={(e) => {
+              onSubmit={async (e) => {
                 e.preventDefault();
-                if (!isValidPortalPassword(pwCurrent)) {
+                const currentOk = activeUser.isPrimaryOwner
+                  ? isValidPortalPassword(pwCurrent) || pwCurrent === activeUser.password
+                  : pwCurrent === activeUser.password;
+                if (!currentOk) {
                   setPwError('Current password is incorrect.');
                   return;
                 }
@@ -2403,12 +2509,19 @@ export function SellerPortal({
                   setPwError('New password and confirmation do not match.');
                   return;
                 }
-                savePortalPassword(pwNext);
-                setPwError(null);
-                setPwSaved(true);
-                setPwCurrent('');
-                setPwNext('');
-                setPwConfirm('');
+                try {
+                  await onUpdateUser(activeUser.id, { password: pwNext });
+                  if (activeUser.isPrimaryOwner) {
+                    savePortalPassword(pwNext);
+                  }
+                  setPwError(null);
+                  setPwSaved(true);
+                  setPwCurrent('');
+                  setPwNext('');
+                  setPwConfirm('');
+                } catch (err) {
+                  setPwError(err instanceof Error ? err.message : 'Could not update password.');
+                }
               }}
               className="space-y-3"
             >

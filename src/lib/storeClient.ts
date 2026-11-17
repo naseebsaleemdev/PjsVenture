@@ -6,13 +6,16 @@ import {
 import type {
   BookingRequest,
   ExportVehicle,
+  PortalUser,
   UnloadingVideo,
   VehicleStatus,
 } from '../types/autoTrade.ts';
+import { INITIAL_PORTAL_USERS, normalizePortalUser } from './portalRoles.ts';
 
 const VEHICLES_KEY = 'pjsventures_vehicles_v1';
 const BOOKINGS_KEY = 'pjsventures_bookings_v1';
 const VIDEOS_KEY = 'pjsventures_videos_v1';
+const USERS_KEY = 'pjsventures_portal_users_v1';
 
 function readLocalVehicles(): ExportVehicle[] {
   try {
@@ -80,6 +83,31 @@ function writeLocalVideos(videos: UnloadingVideo[]): void {
   }
 }
 
+function readLocalUsers(): PortalUser[] {
+  try {
+    const raw = localStorage.getItem(USERS_KEY);
+    if (!raw) {
+      localStorage.setItem(USERS_KEY, JSON.stringify(INITIAL_PORTAL_USERS));
+      return INITIAL_PORTAL_USERS;
+    }
+    const parsed = JSON.parse(raw) as PortalUser[];
+    if (!Array.isArray(parsed) || parsed.length === 0) {
+      return INITIAL_PORTAL_USERS;
+    }
+    return parsed.map((u) => normalizePortalUser(u, u.role));
+  } catch {
+    return INITIAL_PORTAL_USERS;
+  }
+}
+
+function writeLocalUsers(users: PortalUser[]): void {
+  try {
+    localStorage.setItem(USERS_KEY, JSON.stringify(users));
+  } catch {
+    // Ignore storage quota errors
+  }
+}
+
 async function fetchJsonIfApi<T>(url: string, init?: RequestInit): Promise<T | null> {
   try {
     const res = await fetch(url, init);
@@ -97,11 +125,13 @@ export async function loadInitialData(): Promise<{
   vehicles: ExportVehicle[];
   bookings: BookingRequest[];
   videos: UnloadingVideo[];
+  users: PortalUser[];
 }> {
-  const [vehData, bkData, vidData] = await Promise.all([
+  const [vehData, bkData, vidData, usrData] = await Promise.all([
     fetchJsonIfApi<{ vehicles: ExportVehicle[] }>('/api/vehicles'),
     fetchJsonIfApi<{ bookings: BookingRequest[] }>('/api/bookings'),
     fetchJsonIfApi<{ videos: UnloadingVideo[] }>('/api/videos'),
+    fetchJsonIfApi<{ users: PortalUser[] }>('/api/users'),
   ]);
 
   if (vehData && bkData) {
@@ -109,6 +139,10 @@ export async function loadInitialData(): Promise<{
       vehicles: vehData.vehicles,
       bookings: bkData.bookings,
       videos: vidData?.videos ?? readLocalVideos(),
+      users:
+        usrData?.users && usrData.users.length > 0
+          ? usrData.users.map((u) => normalizePortalUser(u, u.role))
+          : readLocalUsers(),
     };
   }
 
@@ -116,6 +150,7 @@ export async function loadInitialData(): Promise<{
     vehicles: readLocalVehicles(),
     bookings: readLocalBookings(),
     videos: readLocalVideos(),
+    users: readLocalUsers(),
   };
 }
 
@@ -300,5 +335,128 @@ export async function deleteVideoRecord(id: string): Promise<void> {
 
   const next = readLocalVideos().filter((v) => v.id !== id);
   writeLocalVideos(next);
+}
+
+export async function createPortalUserRecord(
+  input: Omit<PortalUser, 'id' | 'createdAt'>,
+): Promise<PortalUser> {
+  try {
+    const res = await fetch('/api/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+    const contentType = res.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+      const data = (await res.json()) as { user?: PortalUser; error?: string };
+      if (!res.ok) {
+        throw new Error(data.error || 'Could not create user.');
+      }
+      if (data.user) {
+        return data.user;
+      }
+    }
+  } catch (err) {
+    if (err instanceof Error && err.message && !err.message.includes('fetch')) {
+      throw err;
+    }
+  }
+
+  const current = readLocalUsers();
+  const cleanEmail = input.email.trim().toLowerCase();
+  if (current.some((u) => u.email.trim().toLowerCase() === cleanEmail)) {
+    throw new Error('A user with this email already exists.');
+  }
+  const created = normalizePortalUser(
+    {
+      ...input,
+      email: cleanEmail,
+      id: `usr-${Date.now()}`,
+      isPrimaryOwner: false,
+      createdAt: new Date().toISOString(),
+    },
+    input.role,
+  );
+  writeLocalUsers([...current, created]);
+  return created;
+}
+
+export async function updatePortalUserRecord(
+  id: string,
+  updates: Partial<PortalUser>,
+): Promise<PortalUser | null> {
+  try {
+    const res = await fetch(`/api/users/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    });
+    const contentType = res.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+      const data = (await res.json()) as { user?: PortalUser; error?: string };
+      if (!res.ok) {
+        throw new Error(data.error || 'Could not update user.');
+      }
+      if (data.user) {
+        return data.user;
+      }
+    }
+  } catch (err) {
+    if (err instanceof Error && err.message && !err.message.includes('fetch')) {
+      throw err;
+    }
+  }
+
+  const current = readLocalUsers();
+  const idx = current.findIndex((u) => u.id === id);
+  if (idx === -1) return null;
+  const existing = current[idx];
+  const nextEmail = updates.email ? updates.email.trim().toLowerCase() : existing.email;
+  if (
+    nextEmail !== existing.email &&
+    current.some((u, i) => i !== idx && u.email.trim().toLowerCase() === nextEmail)
+  ) {
+    throw new Error('Another user already uses this email.');
+  }
+  const updated = normalizePortalUser(
+    {
+      ...existing,
+      ...updates,
+      email: nextEmail,
+      password:
+        updates.password && updates.password.trim().length > 0
+          ? updates.password.trim()
+          : existing.password,
+      permissions: updates.permissions
+        ? { ...existing.permissions, ...updates.permissions }
+        : existing.permissions,
+      isPrimaryOwner: existing.isPrimaryOwner,
+    },
+    updates.role || existing.role,
+  );
+  current[idx] = updated;
+  writeLocalUsers(current);
+  return updated;
+}
+
+export async function deletePortalUserRecord(id: string): Promise<void> {
+  try {
+    const res = await fetch(`/api/users/${id}`, { method: 'DELETE' });
+    const contentType = res.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+      if (!res.ok) {
+        const data = (await res.json()) as { error?: string };
+        throw new Error(data.error || 'Could not delete user.');
+      }
+      return;
+    }
+  } catch (err) {
+    if (err instanceof Error && err.message && !err.message.includes('fetch')) {
+      throw err;
+    }
+  }
+
+  const next = readLocalUsers().filter((u) => u.id !== id || u.isPrimaryOwner);
+  writeLocalUsers(next);
 }
 

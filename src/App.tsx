@@ -18,21 +18,26 @@ import {
 } from './data/seedInventory.ts';
 import {
   createBookingRecord,
+  createPortalUserRecord,
   createVehicleRecord,
   createVideoRecord,
   deleteBookingRecord,
+  deletePortalUserRecord,
   deleteVehicleRecord,
   deleteVideoRecord,
   loadInitialData,
   updateBookingRecord,
+  updatePortalUserRecord,
   updateVehicleRecord,
   updateVehicleStatusRecord,
 } from './lib/storeClient.ts';
+import { INITIAL_PORTAL_USERS } from './lib/portalRoles.ts';
 import type {
   AutoCurrency,
   BookingRequest,
   ExportVehicle,
   GlobalPortRegion,
+  PortalUser,
   UnloadingVideo,
   VehicleStatus,
 } from './types/autoTrade.ts';
@@ -76,6 +81,7 @@ export default function App() {
   const [vehicles, setVehicles] = useState<ExportVehicle[]>(INITIAL_VEHICLES);
   const [bookings, setBookings] = useState<BookingRequest[]>([]);
   const [videos, setVideos] = useState<UnloadingVideo[]>(INITIAL_UNLOADING_VIDEOS);
+  const [portalUsers, setPortalUsers] = useState<PortalUser[]>(INITIAL_PORTAL_USERS);
   const [loading, setLoading] = useState<boolean>(true);
   const [currency, setCurrency] = useState<AutoCurrency>('USD');
   const [shortlistIds, setShortlistIds] = useState<string[]>([]);
@@ -125,6 +131,7 @@ export default function App() {
           setVehicles(data.vehicles);
           setBookings(data.bookings);
           setVideos(data.videos);
+          setPortalUsers(data.users);
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -270,12 +277,30 @@ export default function App() {
     setVideos((prev) => prev.filter((v) => v.id !== id));
   };
 
+  const handleCreateUser = async (userInput: Omit<PortalUser, 'id' | 'createdAt'>) => {
+    const created = await createPortalUserRecord(userInput);
+    setPortalUsers((prev) => [...prev, created]);
+  };
+
+  const handleUpdateUser = async (id: string, updates: Partial<PortalUser>) => {
+    const updated = await updatePortalUserRecord(id, updates);
+    if (updated) {
+      setPortalUsers((prev) => prev.map((u) => (u.id === id ? updated : u)));
+    }
+  };
+
+  const handleDeleteUser = async (id: string) => {
+    await deletePortalUserRecord(id);
+    setPortalUsers((prev) => prev.filter((u) => u.id !== id));
+  };
+
   if (route === '/portal') {
     return (
       <SellerPortal
         vehicles={vehicles}
         bookings={bookings}
         videos={videos}
+        users={portalUsers}
         onCreateVehicle={handleCreateVehicle}
         onUpdateVehicle={handleUpdateVehicle}
         onUpdateVehicleStatus={handleUpdateVehicleStatus}
@@ -285,6 +310,9 @@ export default function App() {
         onDeleteBooking={handleDeleteBooking}
         onCreateVideo={handleCreateVideo}
         onDeleteVideo={handleDeleteVideo}
+        onCreateUser={handleCreateUser}
+        onUpdateUser={handleUpdateUser}
+        onDeleteUser={handleDeleteUser}
         onExitPortal={() => navigate('/')}
       />
     );

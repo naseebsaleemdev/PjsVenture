@@ -841,8 +841,8 @@ export const CURRENCY_RATES: Record<
 export function formatAutoPrice(usdAmount: number, currency: AutoCurrency): string {
   const { symbol, rate } = CURRENCY_RATES[currency];
   const converted = usdAmount * rate;
-  const rounded = Math.round(converted / 10) * 10;
-  return `${symbol}${rounded.toLocaleString('en-US')}`;
+  const exact = Math.round(converted);
+  return `${symbol}${exact.toLocaleString('en-US')}`;
 }
 
 export const PORT_TRACKING_STAGES: PortTrackingStage[] = [

@@ -130,3 +130,28 @@ export interface UnloadingVideo {
   createdAt: string;
 }
 
+export type PortalRole = 'Admin' | 'Editor' | 'Viewer';
+
+export interface PortalPermissions {
+  inventoryRead: boolean;
+  inventoryWrite: boolean;
+  inventoryDelete: boolean;
+  bookingsRead: boolean;
+  bookingsWrite: boolean;
+  bookingsDelete: boolean;
+  videosManage: boolean;
+  usersManage: boolean;
+}
+
+export interface PortalUser {
+  id: string;
+  name: string;
+  email: string;
+  password: string;
+  role: PortalRole;
+  active: boolean;
+  permissions: PortalPermissions;
+  isPrimaryOwner?: boolean;
+  createdAt: string;
+}
+

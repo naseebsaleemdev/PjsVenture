@@ -11,8 +11,10 @@ import {
 import type {
   BookingRequest,
   ExportVehicle,
+  PortalUser,
   UnloadingVideo,
 } from './src/types/autoTrade.ts';
+import { INITIAL_PORTAL_USERS, normalizePortalUser } from './src/lib/portalRoles.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -24,6 +26,7 @@ interface StoreData {
   vehicles: ExportVehicle[];
   bookings: BookingRequest[];
   videos: UnloadingVideo[];
+  users: PortalUser[];
 }
 
 function readStore(): StoreData {
@@ -36,22 +39,29 @@ function readStore(): StoreData {
         vehicles: INITIAL_VEHICLES,
         bookings: INITIAL_BOOKINGS,
         videos: INITIAL_UNLOADING_VIDEOS,
+        users: INITIAL_PORTAL_USERS,
       };
       fs.writeFileSync(STORE_PATH, JSON.stringify(initial, null, 2), 'utf-8');
       return initial;
     }
     const raw = fs.readFileSync(STORE_PATH, 'utf-8');
     const parsed = JSON.parse(raw) as Partial<StoreData>;
+    const rawUsers =
+      Array.isArray(parsed.users) && parsed.users.length > 0
+        ? parsed.users.map((u) => normalizePortalUser(u, u.role))
+        : INITIAL_PORTAL_USERS;
     return {
       vehicles: Array.isArray(parsed.vehicles) ? parsed.vehicles : INITIAL_VEHICLES,
       bookings: Array.isArray(parsed.bookings) ? parsed.bookings : INITIAL_BOOKINGS,
       videos: Array.isArray(parsed.videos) ? parsed.videos : INITIAL_UNLOADING_VIDEOS,
+      users: rawUsers,
     };
   } catch {
     return {
       vehicles: INITIAL_VEHICLES,
       bookings: INITIAL_BOOKINGS,
       videos: INITIAL_UNLOADING_VIDEOS,
+      users: INITIAL_PORTAL_USERS,
     };
   }
 }
@@ -267,6 +277,95 @@ async function startServer() {
       return;
     }
     store.videos = nextVideos;
+    writeStore(store);
+    res.json({ deletedId: id });
+  });
+
+  // Seller Portal Team Users & RBAC API
+  app.get('/api/users', (_req, res) => {
+    const store = readStore();
+    res.json({ users: store.users });
+  });
+
+  app.post('/api/users', (req, res) => {
+    const body = req.body as Partial<PortalUser>;
+    const email = body.email?.trim().toLowerCase() || '';
+    if (!body.name?.trim() || !email || !body.password?.trim()) {
+      res.status(400).json({ error: 'name, email, and password are required.' });
+      return;
+    }
+    const store = readStore();
+    if (store.users.some((u) => u.email.trim().toLowerCase() === email)) {
+      res.status(409).json({ error: 'A user with this email already exists.' });
+      return;
+    }
+    const created = normalizePortalUser(
+      {
+        ...body,
+        id: `usr-${Date.now()}`,
+        email,
+        isPrimaryOwner: false,
+        createdAt: new Date().toISOString(),
+      },
+      body.role || 'Viewer',
+    );
+    store.users = [...store.users, created];
+    writeStore(store);
+    res.status(201).json({ user: created });
+  });
+
+  app.patch('/api/users/:id', (req, res) => {
+    const { id } = req.params;
+    const updates = req.body as Partial<PortalUser>;
+    const store = readStore();
+    const index = store.users.findIndex((u) => u.id === id);
+    if (index === -1) {
+      res.status(404).json({ error: 'User not found.' });
+      return;
+    }
+    const existing = store.users[index];
+    const nextEmail = updates.email ? updates.email.trim().toLowerCase() : existing.email;
+    if (
+      nextEmail !== existing.email &&
+      store.users.some((u, idx) => idx !== index && u.email.trim().toLowerCase() === nextEmail)
+    ) {
+      res.status(409).json({ error: 'Another user already uses this email.' });
+      return;
+    }
+    const updated = normalizePortalUser(
+      {
+        ...existing,
+        ...updates,
+        email: nextEmail,
+        password:
+          updates.password && updates.password.trim().length > 0
+            ? updates.password.trim()
+            : existing.password,
+        permissions: updates.permissions
+          ? { ...existing.permissions, ...updates.permissions }
+          : existing.permissions,
+        isPrimaryOwner: existing.isPrimaryOwner,
+      },
+      updates.role || existing.role,
+    );
+    store.users[index] = updated;
+    writeStore(store);
+    res.json({ user: updated });
+  });
+
+  app.delete('/api/users/:id', (req, res) => {
+    const { id } = req.params;
+    const store = readStore();
+    const target = store.users.find((u) => u.id === id);
+    if (!target) {
+      res.status(404).json({ error: 'User not found.' });
+      return;
+    }
+    if (target.isPrimaryOwner) {
+      res.status(400).json({ error: 'Primary owner account cannot be deleted.' });
+      return;
+    }
+    store.users = store.users.filter((u) => u.id !== id);
     writeStore(store);
     res.json({ deletedId: id });
   });

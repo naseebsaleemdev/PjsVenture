@@ -1,18 +1,28 @@
 import { useState } from 'react';
 import { ArrowLeft, CheckCircle2, Eye, EyeOff, KeyRound, Lock } from 'lucide-react';
 import {
+  authenticatePortalUser,
+  getPrimaryOwnerUser,
   isValidPortalEmail,
   isValidPortalPassword,
   isValidRecoveryKey,
   savePortalPassword,
 } from '../lib/portalAuth.ts';
+import type { PortalUser } from '../types/autoTrade.ts';
 
 interface PortalLoginGateProps {
-  onAuthenticated: () => void;
+  users: PortalUser[];
+  onAuthenticated: (user: PortalUser) => void;
+  onSyncOwnerPassword?: (userId: string, nextPassword: string) => Promise<void>;
   onExitPortal: () => void;
 }
 
-export function PortalLoginGate({ onAuthenticated, onExitPortal }: PortalLoginGateProps) {
+export function PortalLoginGate({
+  users,
+  onAuthenticated,
+  onSyncOwnerPassword,
+  onExitPortal,
+}: PortalLoginGateProps) {
   const [mode, setMode] = useState<'signin' | 'reset'>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -30,22 +40,26 @@ export function PortalLoginGate({ onAuthenticated, onExitPortal }: PortalLoginGa
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setSuccessNotice(null);
-    if (isValidPortalEmail(email) && isValidPortalPassword(password)) {
+    const result = authenticatePortalUser(email, password, users);
+    if (result.ok) {
       setError(null);
-      onAuthenticated();
+      onAuthenticated(result.user);
       return;
     }
-    setError('Invalid owner email or password. Access is restricted to authorized sellers.');
+    setError(result.error);
   };
 
-  const handleResetSubmit = (e: React.FormEvent) => {
+  const handleResetSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSuccessNotice(null);
     if (!isValidPortalEmail(resetEmail)) {
-      setError('Owner email does not match authorized seller account.');
+      setError('Password reset is restricted to the primary owner email.');
       return;
     }
-    if (!isValidPortalPassword(verifyCredential) && !isValidRecoveryKey(verifyCredential)) {
+    const ownerUser = getPrimaryOwnerUser(users);
+    const validCurrent =
+      isValidPortalPassword(verifyCredential) || verifyCredential === ownerUser.password;
+    if (!validCurrent && !isValidRecoveryKey(verifyCredential)) {
       setError('Invalid current password or owner recovery key.');
       return;
     }
@@ -59,6 +73,13 @@ export function PortalLoginGate({ onAuthenticated, onExitPortal }: PortalLoginGa
     }
 
     savePortalPassword(newPassword);
+    if (onSyncOwnerPassword && ownerUser.id) {
+      try {
+        await onSyncOwnerPassword(ownerUser.id, newPassword);
+      } catch {
+        // Local storage password already updated
+      }
+    }
     setError(null);
     setEmail(resetEmail.trim());
     setPassword('');
@@ -66,7 +87,7 @@ export function PortalLoginGate({ onAuthenticated, onExitPortal }: PortalLoginGa
     setNewPassword('');
     setConfirmPassword('');
     setMode('signin');
-    setSuccessNotice('Portal & CRM password updated. Sign in below with your new password.');
+    setSuccessNotice('Owner portal password updated. Sign in below with your new password.');
   };
 
   return (
@@ -99,7 +120,7 @@ export function PortalLoginGate({ onAuthenticated, onExitPortal }: PortalLoginGa
               <p className="text-xs text-slate-500">
                 {mode === 'reset'
                   ? 'Verify owner account to set a new password'
-                  : 'Private owner access only'}
+                  : 'Authorized team & owner access only'}
               </p>
             </div>
           </div>
@@ -130,7 +151,7 @@ export function PortalLoginGate({ onAuthenticated, onExitPortal }: PortalLoginGa
                   htmlFor="portal-email"
                   className="block text-xs font-medium text-zinc-950 mb-1.5"
                 >
-                  Owner Email
+                  Team / Owner Email
                 </label>
                 <input
                   id="portal-email"
@@ -139,7 +160,7 @@ export function PortalLoginGate({ onAuthenticated, onExitPortal }: PortalLoginGa
                   autoComplete="username"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="owner@domain.com"
+                  placeholder="name@company.com"
                   className="w-full px-3.5 py-2.5 text-sm rounded-lg border border-slate-300 bg-white focus:outline-none focus:border-blue-900"
                 />
               </div>

@@ -1,0 +1,349 @@
+{
+  "vehicles": [
+    {
+      "id": "corolla-sport-2022",
+      "makeModel": "Toyota Corolla Sport",
+      "trim": "GZ 1.8L Hybrid",
+      "category": "Hybrids",
+      "status": "Available",
+      "year": 2022,
+      "mileageKm": 31800,
+      "chassisCode": "ZWE213H-109842",
+      "engine": "1.8L E-CVT Hybrid",
+      "transmission": "E-CVT Automatic",
+      "drive": "2WD",
+      "fuel": "Hybrid",
+      "steering": "RHD",
+      "color": "Precious Silver Metallic",
+      "port": "Yokohama Yard · Ships to Caribbean",
+      "fobUsd": 16400,
+      "cbm": 11.6,
+      "image": "/src/assets/images/auto_hybrid_aqua_1794825334004.jpg",
+      "images": [
+        "/src/assets/images/auto_hybrid_aqua_1794825334004.jpg",
+        "/src/assets/images/auto_hero_showroom_1794825334875.jpg",
+        "/src/assets/images/auto_roro_shipping_1794825335205.jpg"
+      ],
+      "imageAlt": "2022 Silver Toyota Corolla Sport Hybrid ready for Caribbean import booking.",
+      "createdAt": "2026-11-10T09:00:00.000Z",
+      "transit": {
+        "dealType": "direct-import",
+        "destinationPortId": "nassau",
+        "destinationPortLabel": "Ships to Nassau, Kingston & Caribbean",
+        "vesselName": "Next Weekly RoRo Sailing",
+        "arrivalStatus": "Ready to Book · Yokohama Yard",
+        "fullCifUsd": 17890,
+        "priorDepositUsd": 0,
+        "balanceDueUsd": 17890,
+        "blStatus": "Bill of Lading issued directly in your name upon booking"
+      },
+      "inspection": {
+        "auctionHouse": "TAA Yokohama",
+        "lotNumber": "11904",
+        "overallGrade": "4.5",
+        "exteriorGrade": "B",
+        "interiorGrade": "A",
+        "odometerVerified": true,
+        "radiationCheck": "Cleared · 0.05 µSv/h",
+        "inspectorSummary": "Clean single-owner Japanese hybrid with Toyota Safety Sense, 94% hybrid battery health, and non-smoking cabin. Ready to book for immediate Caribbean dispatch.",
+        "bodyNotes": [
+          "U1 micro-dimple on passenger rear door (no paint break)",
+          "18-inch factory alloy wheels and LED headlamps intact",
+          "Eligible for Nassau, Freeport, Kingston, Cayman & OECS ports"
+        ]
+      }
+    },
+    {
+      "id": "lx600-executive-2023",
+      "makeModel": "Lexus LX / Land Cruiser",
+      "trim": "300 Series Executive 4x4",
+      "category": "SUVs & 4x4",
+      "status": "Available",
+      "year": 2023,
+      "mileageKm": 18400,
+      "chassisCode": "VJA310W-004192",
+      "engine": "3.5L V6 Twin-Turbo",
+      "transmission": "10-Speed Automatic",
+      "drive": "4WD",
+      "fuel": "Petrol",
+      "steering": "RHD",
+      "color": "Sonic Quartz White",
+      "port": "Yokohama Yard · Ships to Caribbean",
+      "fobUsd": 68500,
+      "cbm": 16.4,
+      "image": "/src/assets/images/auto_suv_prado_1794825333513.jpg",
+      "images": [
+        "/src/assets/images/auto_suv_prado_1794825333513.jpg",
+        "/src/assets/images/auto_hero_showroom_1794825334875.jpg",
+        "/src/assets/images/auto_roro_shipping_1794825335205.jpg"
+      ],
+      "imageAlt": "2023 Pearl White Japanese 4x4 luxury SUV ready for Caribbean booking.",
+      "createdAt": "2026-11-11T09:00:00.000Z",
+      "transit": {
+        "dealType": "direct-import",
+        "destinationPortId": "george-town",
+        "destinationPortLabel": "Ships to Cayman, Bahamas & Barbados",
+        "vesselName": "Weekly RoRo or 20ft Container",
+        "arrivalStatus": "Ready to Book · Yokohama Yard",
+        "fullCifUsd": 70140,
+        "priorDepositUsd": 0,
+        "balanceDueUsd": 70140,
+        "blStatus": "Original Export Certificate & B/L issued to buyer"
+      },
+      "inspection": {
+        "auctionHouse": "USS Tokyo",
+        "lotNumber": "48219",
+        "overallGrade": "4.5",
+        "exteriorGrade": "A",
+        "interiorGrade": "A",
+        "odometerVerified": true,
+        "radiationCheck": "Cleared · 0.06 µSv/h",
+        "inspectorSummary": "Flagship 4x4 SUV sourced from Tokyo corporate lease. Original factory paint across all panels, zero underbody corrosion, both smart keys included.",
+        "bodyNotes": [
+          "A1 hairline scuff on rear bumper corner",
+          "360-degree camera, adaptive suspension, and cool box verified",
+          "Recommended 20ft enclosed container shipping available to Cayman & Bahamas"
+        ]
+      }
+    },
+    {
+      "id": "lexus-ls500h-2021",
+      "makeModel": "Lexus LS 500h",
+      "trim": "Version L Multi-Stage Hybrid",
+      "category": "Sedans",
+      "status": "Available",
+      "year": 2021,
+      "mileageKm": 29500,
+      "chassisCode": "GVF50-003811",
+      "engine": "3.5L V6 Multi-Stage Hybrid",
+      "transmission": "10-Speed Multi-Stage",
+      "drive": "2WD",
+      "fuel": "Hybrid",
+      "steering": "RHD",
+      "color": "Obsidian Graphite Black",
+      "port": "Kobe Yard · Ships to Caribbean",
+      "fobUsd": 41200,
+      "cbm": 12.8,
+      "image": "/src/assets/images/auto_sedan_crown_1794825335274.jpg",
+      "images": [
+        "/src/assets/images/auto_sedan_crown_1794825335274.jpg",
+        "/src/assets/images/auto_hero_showroom_1794825334875.jpg",
+        "/src/assets/images/auto_roro_shipping_1794825335205.jpg"
+      ],
+      "imageAlt": "2021 Obsidian Black Lexus LS 500h executive sedan available to book.",
+      "createdAt": "2026-11-12T09:00:00.000Z",
+      "transit": {
+        "dealType": "direct-import",
+        "destinationPortId": "bridgetown",
+        "destinationPortLabel": "Ships to Barbados, Trinidad & Nassau",
+        "vesselName": "Weekly RoRo Sailing",
+        "arrivalStatus": "Ready to Book · Kobe Yard",
+        "fullCifUsd": 42820,
+        "priorDepositUsd": 0,
+        "balanceDueUsd": 42820,
+        "blStatus": "Direct B/L & Export Certificate upon booking"
+      },
+      "inspection": {
+        "auctionHouse": "HAA Kobe",
+        "lotNumber": "30517",
+        "overallGrade": "4.5",
+        "exteriorGrade": "A",
+        "interiorGrade": "A",
+        "odometerVerified": true,
+        "radiationCheck": "Cleared · 0.04 µSv/h",
+        "inspectorSummary": "Chauffeur-maintained executive hybrid with semi-aniline leather, rear ottoman seating, and full dealer service records.",
+        "bodyNotes": [
+          "Zero panel repaints confirmed by paint-depth gauge",
+          "Mark Levinson audio, soft-close doors, and HUD verified",
+          "Ready for immediate export deregistration"
+        ]
+      }
+    },
+    {
+      "id": "hilux-revo-kingston-balance",
+      "makeModel": "Toyota Hilux Revo",
+      "trim": "Z GR-Sport Double Cab 4WD",
+      "category": "Commercial",
+      "status": "In Transit",
+      "year": 2022,
+      "mileageKm": 42100,
+      "chassisCode": "GUN125-772019",
+      "engine": "2.4L 2GD-FTV Turbo Diesel",
+      "transmission": "6-Speed Automatic",
+      "drive": "4WD",
+      "fuel": "Diesel",
+      "steering": "RHD",
+      "color": "Attitude Graphite Grey",
+      "port": "Arrived · Port of Kingston",
+      "fobUsd": 29800,
+      "cbm": 16.8,
+      "image": "/src/assets/images/auto_pickup_hilux_1794825334855.jpg",
+      "images": [
+        "/src/assets/images/auto_pickup_hilux_1794825334855.jpg",
+        "/src/assets/images/auto_roro_shipping_1794825335205.jpg",
+        "/src/assets/images/auto_hero_showroom_1794825334875.jpg"
+      ],
+      "imageAlt": "2022 Graphite Grey Toyota Hilux 4WD Double Cab available on balance release at Kingston.",
+      "createdAt": "2026-11-13T09:00:00.000Z",
+      "transit": {
+        "dealType": "balance-release",
+        "destinationPortId": "kingston",
+        "destinationPortLabel": "Port of Kingston, Jamaica",
+        "vesselName": "MV Morning Lily",
+        "arrivalStatus": "Docked at Port of Kingston · Ready for Clearance",
+        "trackingStage": "At Port",
+        "etaDate": "2026-11-18",
+        "fullCifUsd": 31360,
+        "priorDepositUsd": 14160,
+        "balanceDueUsd": 17200,
+        "blStatus": "Express B/L re-assignment within 24 hours of balance payment"
+      },
+      "inspection": {
+        "auctionHouse": "USS Nagoya",
+        "lotNumber": "62038",
+        "overallGrade": "4.0",
+        "exteriorGrade": "B",
+        "interiorGrade": "B",
+        "odometerVerified": true,
+        "radiationCheck": "Cleared · 0.05 µSv/h",
+        "inspectorSummary": "Special Port Balance-Release unit: prior buyer paid $14,160 deposit before defaulting on final payment. Already landed in Kingston—settle remaining $17,200 to clear and drive.",
+        "bodyNotes": [
+          "Clean frame rails with zero corrosion",
+          "BFGoodrich all-terrain tires fitted at 34,000 km",
+          "Available exclusively for immediate Jamaica Customs clearance"
+        ]
+      }
+    },
+    {
+      "id": "hiace-nassau-balance",
+      "makeModel": "Toyota HiAce Van",
+      "trim": "DX GL Long High-Roof 4WD",
+      "category": "Commercial",
+      "status": "In Transit",
+      "year": 2021,
+      "mileageKm": 56900,
+      "chassisCode": "GDH206V-801442",
+      "engine": "2.8L 1GD-FTV Clean Diesel",
+      "transmission": "6-Speed Automatic",
+      "drive": "4WD",
+      "fuel": "Diesel",
+      "steering": "RHD",
+      "color": "Arctic Solid White",
+      "port": "At Sea · Port of Nassau",
+      "fobUsd": 21900,
+      "cbm": 19.6,
+      "image": "/src/assets/images/auto_van_hiace_1794825335037.jpg",
+      "images": [
+        "/src/assets/images/auto_van_hiace_1794825335037.jpg",
+        "/src/assets/images/auto_roro_shipping_1794825335205.jpg",
+        "/src/assets/images/auto_hero_showroom_1794825334875.jpg"
+      ],
+      "imageAlt": "2021 White Toyota HiAce commercial van sailing toward Nassau, Bahamas.",
+      "createdAt": "2026-11-14T09:00:00.000Z",
+      "transit": {
+        "dealType": "balance-release",
+        "destinationPortId": "nassau",
+        "destinationPortLabel": "Port of Nassau, Bahamas",
+        "vesselName": "MV Hoegh Trigger",
+        "arrivalStatus": "Sailed from Yokohama · En Route to Nassau",
+        "trackingStage": "In Transit",
+        "etaDate": "2026-11-24",
+        "fullCifUsd": 23390,
+        "priorDepositUsd": 10500,
+        "balanceDueUsd": 12890,
+        "blStatus": "Consignee amendment ready before Nassau discharge"
+      },
+      "inspection": {
+        "auctionHouse": "JU Osaka",
+        "lotNumber": "20891",
+        "overallGrade": "4.0",
+        "exteriorGrade": "B",
+        "interiorGrade": "B",
+        "odometerVerified": true,
+        "radiationCheck": "Cleared · 0.05 µSv/h",
+        "inspectorSummary": "Special Port Balance-Release unit: original buyer paid $10,500 deposit before cancelling mid-transit. Pay only the remaining $12,890 and clear straight from Arawak Cay, Nassau.",
+        "bodyNotes": [
+          "Strong 2.8L clean diesel compression and rear AC blower",
+          "Light loading scuff on rear sill trim",
+          "Ideal for Bahamas island shuttle, hotel transfer, or cargo fleet"
+        ]
+      }
+    }
+  ],
+  "bookings": [
+    {
+      "id": "bk-1042",
+      "vehicleId": "corolla-sport-2022",
+      "vehicleTitle": "2022 Toyota Corolla Sport",
+      "chassisCode": "ZWE213H-109842",
+      "buyerName": "Marcus Rolle",
+      "buyerEmail": "m.rolle@bahamasmobility.bs",
+      "buyerPhone": "+1 242 555 0183",
+      "destinationPortId": "nassau",
+      "destinationPortName": "Port of Nassau (Arawak Cay), Bahamas",
+      "requestType": "Book Direct Japan Import",
+      "shippingMethod": "RoRo Vessel",
+      "quotedAmountUsd": 17890,
+      "notes": "Requesting proforma invoice for RoRo dispatch to Nassau next Tuesday sailing.",
+      "status": "Pending Review",
+      "createdAt": "2026-11-15T14:20:00.000Z"
+    }
+  ],
+  "videos": [
+    {
+      "id": "vid-nassau-suv",
+      "title": "4x4 SUV Unloading from 40ft Container",
+      "portLabel": "Port of Nassau, Bahamas",
+      "containerType": "40ft Container · Ramp Discharge",
+      "vehicleSummary": "Japanese 4WD Land Cruiser / Prado Export",
+      "videoUrl": "/src/assets/videos/unloading_suv_nassau.mp4",
+      "posterUrl": "/src/assets/images/container_unload_suv_1794837300196.jpg",
+      "durationLabel": "0:06",
+      "createdAt": "2026-11-12T10:00:00.000Z"
+    },
+    {
+      "id": "vid-kingston-hybrid",
+      "title": "Hybrid Hatchback Container Roll-Out",
+      "portLabel": "Port of Kingston, Jamaica",
+      "containerType": "20ft Container · Foam-Braced Transit",
+      "vehicleSummary": "Toyota Hybrid Hatchback Arrival",
+      "videoUrl": "/src/assets/videos/unloading_hybrid_kingston.mp4",
+      "posterUrl": "/src/assets/images/container_unload_hybrid_1794837300796.jpg",
+      "durationLabel": "0:06",
+      "createdAt": "2026-11-13T10:00:00.000Z"
+    },
+    {
+      "id": "vid-cayman-pickup",
+      "title": "4WD Double-Cab & Van Container Devanned",
+      "portLabel": "George Town Port, Cayman Islands",
+      "containerType": "40ft High-Cube · Dual Steel Ramps",
+      "vehicleSummary": "Toyota Hilux 4WD & Commercial Fleet",
+      "videoUrl": "/src/assets/videos/unloading_pickup_cayman.mp4",
+      "posterUrl": "/src/assets/images/container_unload_pickup_1794837300966.jpg",
+      "durationLabel": "0:06",
+      "createdAt": "2026-11-14T10:00:00.000Z"
+    }
+  ],
+  "users": [
+    {
+      "id": "owner-admin",
+      "name": "Owner Admin",
+      "email": "naseebsaleemvmi@gmail.com",
+      "password": "PJS#2026",
+      "role": "Admin",
+      "active": true,
+      "permissions": {
+        "inventoryRead": true,
+        "inventoryWrite": true,
+        "inventoryDelete": true,
+        "bookingsRead": true,
+        "bookingsWrite": true,
+        "bookingsDelete": true,
+        "videosManage": true,
+        "usersManage": true
+      },
+      "isPrimaryOwner": true,
+      "createdAt": "2026-11-01T00:00:00.000Z"
+    }
+  ]
+}
