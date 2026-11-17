@@ -1,4 +1,4 @@
-import type { User } from 'firebase/auth';
+import { sendEmailVerification, type User } from 'firebase/auth';
 import {
   collection,
   deleteDoc,
@@ -27,6 +27,7 @@ import type {
 } from '../types/autoTrade.ts';
 import {
   OperationType,
+  auth,
   db,
   emailToPortalUserId,
   handleFirestoreError,
@@ -268,12 +269,64 @@ export type PortalUserResolution =
 export async function resolveAuthorizedPortalUser(
   firebaseUser: User,
 ): Promise<PortalUserResolution> {
-  const email = firebaseUser.email?.trim().toLowerCase() || '';
-  if (!email || !firebaseUser.emailVerified) {
+  const extractUserEmailAndVerification = async (targetUser: User, forceRefresh: boolean) => {
+    let claimEmail = '';
+    let claimVerified = false;
+    try {
+      const tokenResult = await targetUser.getIdTokenResult(forceRefresh);
+      if (typeof tokenResult.claims.email === 'string') {
+        claimEmail = tokenResult.claims.email.trim().toLowerCase();
+      }
+      claimVerified = tokenResult.claims.email_verified === true;
+    } catch {
+      // Ignore token claim read failure and fall back to user profile
+    }
+    const providerEmail =
+      targetUser.providerData
+        ?.find((p) => Boolean(p.email))
+        ?.email?.trim()
+        .toLowerCase() || '';
+    const resolvedEmail = targetUser.email?.trim().toLowerCase() || claimEmail || providerEmail;
+    const resolvedVerified = Boolean(targetUser.emailVerified) || claimVerified;
+    return { resolvedEmail, resolvedVerified };
+  };
+
+  let { resolvedEmail: email, resolvedVerified: isVerified } =
+    await extractUserEmailAndVerification(firebaseUser, false);
+
+  if (!email || !isVerified) {
+    try {
+      await firebaseUser.reload();
+      const refreshedUser = auth.currentUser || firebaseUser;
+      const refreshed = await extractUserEmailAndVerification(refreshedUser, true);
+      email = refreshed.resolvedEmail || email;
+      isVerified = refreshed.resolvedVerified || isVerified;
+    } catch {
+      // Ignore reload failure
+    }
+  }
+
+  if (!email) {
     return {
       ok: false,
-      error: 'A verified Google account email is required to access the Seller Portal.',
+      error:
+        'Google sign-in did not provide an email address. In Firebase Console → Authentication → Settings → User account linking, ensure "Link accounts that use the same email" is enabled, then try again.',
     };
+  }
+
+  if (!isVerified) {
+    try {
+      await sendEmailVerification(firebaseUser);
+      return {
+        ok: false,
+        error: `Email ${email} is not marked as verified yet. We sent a verification link to ${email} — open that link in your inbox, then sign in again.`,
+      };
+    } catch {
+      return {
+        ok: false,
+        error: `Email ${email} is not verified in Firebase Auth. Verify ${email} (or check User account linking in Firebase Console) and try again.`,
+      };
+    }
   }
 
   const userDocId = emailToPortalUserId(email);
