@@ -13,6 +13,10 @@ interface PortalLoginGateProps {
 
 function formatGoogleSignInError(err: unknown): string {
   const code = (err as { code?: string })?.code || '';
+  if (code === 'auth/unauthorized-domain') {
+    const host = typeof window !== 'undefined' ? window.location.hostname : 'this domain';
+    return `Domain not authorized for Google Sign-In (${host}). Add "${host}" in Firebase Console → Authentication → Settings → Authorized domains, then retry.`;
+  }
   if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
     return 'Google sign-in popup was closed before completion. Try again when ready.';
   }
@@ -35,16 +39,22 @@ export function PortalLoginGate({
 }: PortalLoginGateProps) {
   const [signingIn, setSigningIn] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
+  const [isUnauthorizedDomain, setIsUnauthorizedDomain] = useState(false);
 
   const displayedError = localError || authError;
+  const currentHost = typeof window !== 'undefined' ? window.location.hostname : '';
 
   const handleGoogleSignIn = async () => {
     setLocalError(null);
+    setIsUnauthorizedDomain(false);
     onClearAuthError();
     setSigningIn(true);
     try {
       await signInPortalWithGoogle();
     } catch (err) {
+      if ((err as { code?: string })?.code === 'auth/unauthorized-domain') {
+        setIsUnauthorizedDomain(true);
+      }
       setLocalError(formatGoogleSignInError(err));
     } finally {
       setSigningIn(false);
@@ -103,9 +113,24 @@ export function PortalLoginGate({
             {displayedError && (
               <div
                 role="alert"
-                className="text-xs text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-800 rounded-lg px-3.5 py-2.5 leading-relaxed"
+                className="text-xs text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-800 rounded-lg px-3.5 py-2.5 leading-relaxed space-y-2"
               >
-                {displayedError}
+                <p>{displayedError}</p>
+                {isUnauthorizedDomain && currentHost && (
+                  <div className="pt-1 border-t border-red-200/70 dark:border-red-800/70 space-y-1.5">
+                    <div className="font-mono text-[11px] bg-white/80 dark:bg-zinc-950/80 px-2 py-1 rounded border border-red-200 dark:border-red-800 select-all break-all">
+                      {currentHost}
+                    </div>
+                    <a
+                      href="https://console.firebase.google.com/project/kingly-haven-hxq1s/authentication/settings"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-block font-medium underline hover:opacity-80"
+                    >
+                      Open Firebase Authorized Domains Settings
+                    </a>
+                  </div>
+                )}
               </div>
             )}
 
