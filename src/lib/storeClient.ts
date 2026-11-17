@@ -381,6 +381,10 @@ export async function resolveAuthorizedPortalUser(
 }
 
 export async function seedInitialCatalogIfEmpty(user: PortalUser): Promise<void> {
+  if (!user.isPrimaryOwner) {
+    return;
+  }
+
   if (user.permissions.inventoryWrite) {
     try {
       const vehSnap = await getDocs(collection(db, 'vehicles'));

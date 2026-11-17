@@ -59,29 +59,110 @@ service cloud.firestore {
       return isVerifiedUser() && requesterEmail() == 'naseebsaleemvmi@gmail.com';
     }
 
-    function hasActivePortalUser() {
-      return isVerifiedUser() &&
-        exists(/databases/$(database)/documents/portalUsers/$(requesterEmailKey())) &&
-        get(/databases/$(database)/documents/portalUsers/$(requesterEmailKey())).data.active == true &&
-        get(/databases/$(database)/documents/portalUsers/$(requesterEmailKey())).data.email == requesterEmail();
+    function portalUserPath() {
+      return /databases/$(database)/documents/portalUsers/$(requesterEmailKey());
     }
 
-    function portalUserData() {
-      return get(/databases/$(database)/documents/portalUsers/$(requesterEmailKey())).data;
+    function isActiveUserDoc(u) {
+      return u is map &&
+        u.active == true &&
+        u.email == requesterEmail() &&
+        u.permissions is map;
+    }
+
+    function userIsPortalAdmin(u) {
+      return isActiveUserDoc(u) && u.role == 'Admin' && u.permissions.usersManage == true;
+    }
+
+    function userCanWriteInventory(u) {
+      return isActiveUserDoc(u) && u.permissions.inventoryWrite == true;
+    }
+
+    function userCanDeleteInventory(u) {
+      return isActiveUserDoc(u) && u.permissions.inventoryDelete == true;
+    }
+
+    function userCanReadBookings(u) {
+      return isActiveUserDoc(u) && u.permissions.bookingsRead == true;
+    }
+
+    function userCanWriteBookings(u) {
+      return isActiveUserDoc(u) && u.permissions.bookingsWrite == true;
+    }
+
+    function userCanDeleteBookings(u) {
+      return isActiveUserDoc(u) && u.permissions.bookingsDelete == true;
+    }
+
+    function userCanManageVideos(u) {
+      return isActiveUserDoc(u) && u.permissions.videosManage == true;
+    }
+
+    function userCanManageUsers(u) {
+      return isActiveUserDoc(u) && u.permissions.usersManage == true;
     }
 
     function isPortalAdmin() {
       return isPrimaryOwner() || (
-        hasActivePortalUser() &&
-        portalUserData().role == 'Admin' &&
-        portalUserData().permissions.usersManage == true
+        isVerifiedUser() &&
+        exists(portalUserPath()) &&
+        userIsPortalAdmin(get(portalUserPath()).data)
       );
     }
 
-    function hasPortalPerm(permKey) {
+    function canWriteInventory() {
       return isPrimaryOwner() || (
-        hasActivePortalUser() &&
-        portalUserData().permissions[permKey] == true
+        isVerifiedUser() &&
+        exists(portalUserPath()) &&
+        userCanWriteInventory(get(portalUserPath()).data)
+      );
+    }
+
+    function canDeleteInventory() {
+      return isPrimaryOwner() || (
+        isVerifiedUser() &&
+        exists(portalUserPath()) &&
+        userCanDeleteInventory(get(portalUserPath()).data)
+      );
+    }
+
+    function canReadBookings() {
+      return isPrimaryOwner() || (
+        isVerifiedUser() &&
+        exists(portalUserPath()) &&
+        userCanReadBookings(get(portalUserPath()).data)
+      );
+    }
+
+    function canWriteBookings() {
+      return isPrimaryOwner() || (
+        isVerifiedUser() &&
+        exists(portalUserPath()) &&
+        userCanWriteBookings(get(portalUserPath()).data)
+      );
+    }
+
+    function canDeleteBookings() {
+      return isPrimaryOwner() || (
+        isVerifiedUser() &&
+        exists(portalUserPath()) &&
+        userCanDeleteBookings(get(portalUserPath()).data)
+      );
+    }
+
+    function canManageVideos() {
+      return isPrimaryOwner() || (
+        isVerifiedUser() &&
+        exists(portalUserPath()) &&
+        userCanManageVideos(get(portalUserPath()).data)
+      );
+    }
+
+    function canManageUsers() {
+      return isPrimaryOwner() || (
+        isVerifiedUser() &&
+        exists(portalUserPath()) &&
+        userCanManageUsers(get(portalUserPath()).data)
       );
     }
 
@@ -425,18 +506,17 @@ service cloud.firestore {
       allow get: if isValidId(vehicleId);
       allow list: if true;
       allow create: if isValidId(vehicleId) &&
-        hasPortalPerm('inventoryWrite') &&
         isValidVehicle(incoming()) &&
         incoming().id == vehicleId &&
-        incoming().createdAt == request.time;
+        incoming().createdAt == request.time &&
+        canWriteInventory();
       allow update: if isValidId(vehicleId) &&
         isValidVehicle(incoming()) &&
-        hasPortalPerm('inventoryWrite') &&
         incoming().id == existing().id &&
         incoming().createdAt == existing().createdAt &&
         (!('updatedAt' in incoming()) || incoming().updatedAt == request.time) &&
+        canWriteInventory() &&
         (
-          isPortalAdmin() ||
           incoming().diff(existing()).affectedKeys().hasOnly([
             'makeModel',
             'trim',
@@ -460,38 +540,36 @@ service cloud.firestore {
             'updatedAt',
             'transit',
             'inspection'
-          ])
+          ]) ||
+          isPortalAdmin()
         );
-      allow delete: if isValidId(vehicleId) && hasPortalPerm('inventoryDelete');
+      allow delete: if isValidId(vehicleId) && canDeleteInventory();
     }
 
     // Buyer booking inquiries (strictly isolated PII: public create only, staff read/manage)
     match /bookings/{bookingId} {
-      allow get: if isValidId(bookingId) && hasPortalPerm('bookingsRead');
-      allow list: if isVerifiedUser() && (
-        isPrimaryOwner() ||
-        hasPortalPerm('bookingsRead')
-      );
+      allow get: if isValidId(bookingId) && canReadBookings();
+      allow list: if canReadBookings();
       allow create: if isValidId(bookingId) &&
         isValidBooking(incoming()) &&
         incoming().id == bookingId &&
         incoming().createdAt == request.time &&
         (
           (incoming().status == 'Pending Review' && (!('crmNotes' in incoming()) || incoming().crmNotes == '')) ||
-          hasPortalPerm('bookingsWrite')
+          canWriteBookings()
         );
       allow update: if isValidId(bookingId) &&
         isValidBooking(incoming()) &&
-        hasPortalPerm('bookingsWrite') &&
         incoming().id == existing().id &&
         incoming().createdAt == existing().createdAt &&
         (!('updatedAt' in incoming()) || incoming().updatedAt == request.time) &&
+        canWriteBookings() &&
         (existing().status != 'Cancelled' || isPortalAdmin()) &&
         (
-          isPortalAdmin() ||
-          incoming().diff(existing()).affectedKeys().hasOnly(['status', 'crmNotes', 'updatedAt'])
+          incoming().diff(existing()).affectedKeys().hasOnly(['status', 'crmNotes', 'updatedAt']) ||
+          isPortalAdmin()
         );
-      allow delete: if isValidId(bookingId) && hasPortalPerm('bookingsDelete');
+      allow delete: if isValidId(bookingId) && canDeleteBookings();
     }
 
     // Public container unloading showcase videos (contains zero PII)
@@ -499,13 +577,12 @@ service cloud.firestore {
       allow get: if isValidId(videoId);
       allow list: if true;
       allow create: if isValidId(videoId) &&
-        hasPortalPerm('videosManage') &&
         isValidVideo(incoming()) &&
         incoming().id == videoId &&
-        incoming().createdAt == request.time;
+        incoming().createdAt == request.time &&
+        canManageVideos();
       allow update: if isValidId(videoId) &&
         isValidVideo(incoming()) &&
-        hasPortalPerm('videosManage') &&
         incoming().id == existing().id &&
         incoming().createdAt == existing().createdAt &&
         incoming().diff(existing()).affectedKeys().hasOnly([
@@ -516,19 +593,17 @@ service cloud.firestore {
           'videoUrl',
           'posterUrl',
           'durationLabel'
-        ]);
-      allow delete: if isValidId(videoId) && hasPortalPerm('videosManage');
+        ]) &&
+        canManageVideos();
+      allow delete: if isValidId(videoId) && canManageVideos();
     }
 
     // Team Member RBAC directory (PII isolated to self or Admin)
     match /portalUsers/{userId} {
       allow get: if isValidId(userId) &&
         isVerifiedUser() &&
-        (userId == requesterEmailKey() || hasPortalPerm('usersManage'));
-      allow list: if isVerifiedUser() && (
-        isPrimaryOwner() ||
-        hasPortalPerm('usersManage')
-      );
+        (userId == requesterEmailKey() || canManageUsers());
+      allow list: if canManageUsers();
       allow create: if isValidId(userId) &&
         isValidPortalUser(incoming()) &&
         incoming().id == userId &&
@@ -543,13 +618,12 @@ service cloud.firestore {
             incoming().active == true
           ) ||
           (
-            hasPortalPerm('usersManage') &&
-            incoming().isPrimaryOwner == false
+            incoming().isPrimaryOwner == false &&
+            canManageUsers()
           )
         );
       allow update: if isValidId(userId) &&
         isValidPortalUser(incoming()) &&
-        hasPortalPerm('usersManage') &&
         incoming().id == existing().id &&
         incoming().email == existing().email &&
         incoming().createdAt == existing().createdAt &&
@@ -576,11 +650,12 @@ service cloud.firestore {
           'active',
           'permissions',
           'updatedAt'
-        ]);
+        ]) &&
+        canManageUsers();
       allow delete: if isValidId(userId) &&
-        hasPortalPerm('usersManage') &&
         existing().isPrimaryOwner == false &&
-        userId != requesterEmailKey();
+        userId != requesterEmailKey() &&
+        canManageUsers();
     }
   }
 }
