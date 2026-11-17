@@ -302,7 +302,7 @@ async function startServer() {
     const created = normalizePortalUser(
       {
         ...body,
-        id: `usr-${Date.now()}`,
+        id: `usr-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
         email,
         isPrimaryOwner: false,
         createdAt: new Date().toISOString(),

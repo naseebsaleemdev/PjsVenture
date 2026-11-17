@@ -204,17 +204,35 @@ export function PortalUsersPanel({
     setError(null);
     setNotice(null);
 
-    if (!name.trim() || !email.trim()) {
-      setError('Please enter full name and email address.');
+    const trimmedName = name.trim();
+    const cleanEmail = email.trim().toLowerCase();
+    const trimmedPassword = password.trim();
+
+    if (!trimmedName) {
+      setError('Please enter the user full name.');
       return;
     }
 
-    if (!editingId && password.trim().length < 6) {
+    if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      setError('Please enter a valid login email address (e.g. staff@pjsventures.com).');
+      return;
+    }
+
+    if (
+      users.some(
+        (u) => u.id !== editingId && u.email.trim().toLowerCase() === cleanEmail,
+      )
+    ) {
+      setError('A user with this email already exists. Use a different email for each user.');
+      return;
+    }
+
+    if (!editingId && trimmedPassword.length < 6) {
       setError('Please set a password of at least 6 characters for the new user.');
       return;
     }
 
-    if (editingId && password.trim().length > 0 && password.trim().length < 6) {
+    if (editingId && trimmedPassword.length > 0 && trimmedPassword.length < 6) {
       setError('Updated password must be at least 6 characters.');
       return;
     }
@@ -223,27 +241,28 @@ export function PortalUsersPanel({
     try {
       if (editingId) {
         await onUpdateUser(editingId, {
-          name: name.trim(),
-          email: email.trim().toLowerCase(),
-          ...(password.trim() ? { password: password.trim() } : {}),
+          name: trimmedName,
+          email: cleanEmail,
+          ...(trimmedPassword ? { password: trimmedPassword } : {}),
           role: isEditingPrimaryOwner ? 'Admin' : role,
           active: isEditingPrimaryOwner ? true : active,
           permissions: isEditingPrimaryOwner ? createPermissionsForRole('Admin') : permissions,
         });
-        setNotice(`Updated access permissions for ${name.trim()}.`);
+        resetForm();
+        setNotice(`Updated access permissions for ${trimmedName}.`);
       } else {
         await onCreateUser({
-          name: name.trim(),
-          email: email.trim().toLowerCase(),
-          password: password.trim(),
+          name: trimmedName,
+          email: cleanEmail,
+          password: trimmedPassword,
           role,
           active,
           permissions,
           isPrimaryOwner: false,
         });
-        setNotice(`Created account for ${name.trim()} (${role}).`);
+        resetForm();
+        setNotice(`Created account for ${trimmedName} (${role}). You can add another user below.`);
       }
-      resetForm();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save user.');
     } finally {
@@ -255,6 +274,7 @@ export function PortalUsersPanel({
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
       {/* Left: Create / Edit User & Permissions Matrix */}
       <form
+        noValidate
         onSubmit={handleSubmit}
         className="lg:col-span-5 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl p-6 space-y-5"
       >
@@ -273,7 +293,7 @@ export function PortalUsersPanel({
               onClick={resetForm}
               className="px-2.5 py-1 text-xs font-medium text-slate-600 dark:text-zinc-300 bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 rounded-md cursor-pointer shrink-0"
             >
-              New User
+              + New User
             </button>
           )}
         </div>

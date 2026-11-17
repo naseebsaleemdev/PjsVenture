@@ -16,6 +16,46 @@ const VEHICLES_KEY = 'pjsventures_vehicles_v1';
 const BOOKINGS_KEY = 'pjsventures_bookings_v1';
 const VIDEOS_KEY = 'pjsventures_videos_v1';
 const USERS_KEY = 'pjsventures_portal_users_v1';
+const DELETED_USER_EMAILS_KEY = 'pjsventures_deleted_user_emails_v1';
+
+function readDeletedUserEmails(): string[] {
+  try {
+    const raw = localStorage.getItem(DELETED_USER_EMAILS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as string[];
+    return Array.isArray(parsed) ? parsed.map((e) => String(e).trim().toLowerCase()) : [];
+  } catch {
+    return [];
+  }
+}
+
+function addDeletedUserEmail(email: string): void {
+  try {
+    const clean = email.trim().toLowerCase();
+    if (!clean) return;
+    const prev = readDeletedUserEmails();
+    if (!prev.includes(clean)) {
+      localStorage.setItem(DELETED_USER_EMAILS_KEY, JSON.stringify([...prev, clean]));
+    }
+  } catch {
+    // Ignore storage errors
+  }
+}
+
+function removeDeletedUserEmail(email: string): void {
+  try {
+    const clean = email.trim().toLowerCase();
+    const prev = readDeletedUserEmails();
+    if (prev.includes(clean)) {
+      localStorage.setItem(
+        DELETED_USER_EMAILS_KEY,
+        JSON.stringify(prev.filter((e) => e !== clean)),
+      );
+    }
+  } catch {
+    // Ignore storage errors
+  }
+}
 
 function readLocalVehicles(): ExportVehicle[] {
   try {
@@ -108,6 +148,27 @@ function writeLocalUsers(users: PortalUser[]): void {
   }
 }
 
+function mergeServerAndLocalUsers(serverUsers: PortalUser[]): PortalUser[] {
+  const localUsers = readLocalUsers();
+  const deletedEmails = readDeletedUserEmails();
+  const normalizedServer = serverUsers.map((u) => normalizePortalUser(u, u.role));
+  const merged = [...normalizedServer];
+  for (const localUser of localUsers) {
+    const cleanEmail = localUser.email.trim().toLowerCase();
+    if (!cleanEmail || deletedEmails.includes(cleanEmail)) continue;
+    const alreadyOnServer = merged.some(
+      (s) => s.email.trim().toLowerCase() === cleanEmail || s.id === localUser.id,
+    );
+    if (!alreadyOnServer) {
+      merged.push(localUser);
+    }
+  }
+  writeLocalUsers(merged);
+  return merged;
+}
+
+class ApiBusinessError extends Error {}
+
 async function fetchJsonIfApi<T>(url: string, init?: RequestInit): Promise<T | null> {
   try {
     const res = await fetch(url, init);
@@ -141,7 +202,7 @@ export async function loadInitialData(): Promise<{
       videos: vidData?.videos ?? readLocalVideos(),
       users:
         usrData?.users && usrData.users.length > 0
-          ? usrData.users.map((u) => normalizePortalUser(u, u.role))
+          ? mergeServerAndLocalUsers(usrData.users)
           : readLocalUsers(),
     };
   }
@@ -340,30 +401,39 @@ export async function deleteVideoRecord(id: string): Promise<void> {
 export async function createPortalUserRecord(
   input: Omit<PortalUser, 'id' | 'createdAt'>,
 ): Promise<PortalUser> {
+  const cleanEmail = input.email.trim().toLowerCase();
+  removeDeletedUserEmail(cleanEmail);
+
   try {
     const res = await fetch('/api/users', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(input),
+      body: JSON.stringify({ ...input, email: cleanEmail }),
     });
     const contentType = res.headers.get('content-type') || '';
     if (contentType.includes('application/json')) {
       const data = (await res.json()) as { user?: PortalUser; error?: string };
-      if (!res.ok) {
-        throw new Error(data.error || 'Could not create user.');
+      if ((res.status === 400 || res.status === 409) && data.error) {
+        throw new ApiBusinessError(data.error);
       }
-      if (data.user) {
-        return data.user;
+      if (res.ok && data.user) {
+        const normalized = normalizePortalUser(data.user, data.user.role);
+        const current = readLocalUsers();
+        const withoutDup = current.filter(
+          (u) => u.id !== normalized.id && u.email.trim().toLowerCase() !== cleanEmail,
+        );
+        writeLocalUsers([...withoutDup, normalized]);
+        return normalized;
       }
     }
   } catch (err) {
-    if (err instanceof Error && err.message && !err.message.includes('fetch')) {
+    if (err instanceof ApiBusinessError) {
       throw err;
     }
+    // Network / static hosting error -> seamlessly fall back to browser storage
   }
 
   const current = readLocalUsers();
-  const cleanEmail = input.email.trim().toLowerCase();
   if (current.some((u) => u.email.trim().toLowerCase() === cleanEmail)) {
     throw new Error('A user with this email already exists.');
   }
@@ -371,7 +441,7 @@ export async function createPortalUserRecord(
     {
       ...input,
       email: cleanEmail,
-      id: `usr-${Date.now()}`,
+      id: `usr-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       isPrimaryOwner: false,
       createdAt: new Date().toISOString(),
     },
@@ -394,15 +464,24 @@ export async function updatePortalUserRecord(
     const contentType = res.headers.get('content-type') || '';
     if (contentType.includes('application/json')) {
       const data = (await res.json()) as { user?: PortalUser; error?: string };
-      if (!res.ok) {
-        throw new Error(data.error || 'Could not update user.');
+      if ((res.status === 400 || res.status === 409) && data.error) {
+        throw new ApiBusinessError(data.error);
       }
-      if (data.user) {
-        return data.user;
+      if (res.ok && data.user) {
+        const normalized = normalizePortalUser(data.user, data.user.role);
+        const current = readLocalUsers();
+        const idx = current.findIndex((u) => u.id === id);
+        if (idx !== -1) {
+          current[idx] = normalized;
+          writeLocalUsers(current);
+        } else {
+          writeLocalUsers([...current, normalized]);
+        }
+        return normalized;
       }
     }
   } catch (err) {
-    if (err instanceof Error && err.message && !err.message.includes('fetch')) {
+    if (err instanceof ApiBusinessError) {
       throw err;
     }
   }
@@ -440,23 +519,25 @@ export async function updatePortalUserRecord(
 }
 
 export async function deletePortalUserRecord(id: string): Promise<void> {
+  const localBefore = readLocalUsers();
+  const targetLocal = localBefore.find((u) => u.id === id);
+  if (targetLocal && !targetLocal.isPrimaryOwner) {
+    addDeletedUserEmail(targetLocal.email);
+  }
+  const filteredLocal = localBefore.filter((u) => u.id !== id || u.isPrimaryOwner);
+  writeLocalUsers(filteredLocal);
+
   try {
     const res = await fetch(`/api/users/${id}`, { method: 'DELETE' });
     const contentType = res.headers.get('content-type') || '';
-    if (contentType.includes('application/json')) {
-      if (!res.ok) {
-        const data = (await res.json()) as { error?: string };
-        throw new Error(data.error || 'Could not delete user.');
-      }
-      return;
+    if (contentType.includes('application/json') && res.status === 400) {
+      const data = (await res.json()) as { error?: string };
+      throw new ApiBusinessError(data.error || 'Could not delete user.');
     }
   } catch (err) {
-    if (err instanceof Error && err.message && !err.message.includes('fetch')) {
+    if (err instanceof ApiBusinessError) {
       throw err;
     }
   }
-
-  const next = readLocalUsers().filter((u) => u.id !== id || u.isPrimaryOwner);
-  writeLocalUsers(next);
 }
 
