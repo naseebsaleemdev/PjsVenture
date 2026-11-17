@@ -90,13 +90,19 @@ export function FreightCalculatorWidget({
   useEffect(() => {
     if (fixedVehicle) {
       setSelectedVehicleId(fixedVehicle.id);
-      const nextCountry = getCountryFromPortId(
-        fixedVehicle.transit.destinationPortId,
-        fixedVehicle.transit.destinationPortLabel,
-      );
-      setDestCountry(nextCountry);
-      setMethod('roro');
-      setCalculatedState({ country: nextCountry, method: 'roro' });
+      if (
+        fixedVehicle.transit.dealType === 'balance-release' ||
+        (fixedVehicle.transit.destinationPortId &&
+          fixedVehicle.transit.destinationPortId !== 'worldwide')
+      ) {
+        const nextCountry = getCountryFromPortId(
+          fixedVehicle.transit.destinationPortId,
+          fixedVehicle.transit.destinationPortLabel,
+        );
+        setDestCountry(nextCountry);
+        setMethod('roro');
+        setCalculatedState({ country: nextCountry, method: 'roro' });
+      }
     }
   }, [
     fixedVehicle?.id,
@@ -333,7 +339,12 @@ export function FreightCalculatorWidget({
                     const nextId = e.target.value;
                     setSelectedVehicleId(nextId);
                     const match = vehicles.find((v) => v.id === nextId);
-                    if (match) {
+                    if (
+                      match &&
+                      (match.transit.dealType === 'balance-release' ||
+                        (match.transit.destinationPortId &&
+                          match.transit.destinationPortId !== 'worldwide'))
+                    ) {
                       const nextCountry = getCountryFromPortId(match.transit.destinationPortId);
                       setDestCountry(nextCountry);
                       setMethod('roro');

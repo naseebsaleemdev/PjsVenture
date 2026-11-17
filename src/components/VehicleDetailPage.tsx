@@ -421,7 +421,7 @@ export function VehicleDetailPage({
                     </div>
                     <div className="pt-3 border-t border-slate-200 flex justify-between items-baseline">
                       <span className="text-sm font-semibold text-zinc-950">
-                        Estimated Caribbean CIF
+                        Estimated CIF Price
                       </span>
                       <span className="font-mono text-2xl font-semibold text-blue-900 tabular-nums">
                         {formatAutoPrice(vehicle.transit.fullCifUsd, currency)}

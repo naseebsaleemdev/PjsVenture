@@ -513,9 +513,10 @@ export function SellerPortal({
     setFuel(vehicle.fuel);
     setSteering(vehicle.steering);
     setColor(vehicle.color);
-    const editPortId = vehicle.transit.destinationPortId || DESTINATION_PORTS[0].id;
-    const matchedPort = DESTINATION_PORTS.find((p) => p.id === editPortId) ?? DESTINATION_PORTS[0];
-    setDestinationPortId(editPortId);
+    const matchedPort =
+      DESTINATION_PORTS.find((p) => p.id === vehicle.transit.destinationPortId) ??
+      DESTINATION_PORTS[0];
+    setDestinationPortId(matchedPort.id);
     setDispatchedPortText(
       vehicle.transit.dealType === 'balance-release'
         ? vehicle.transit.destinationPortLabel
@@ -587,11 +588,11 @@ export function SellerPortal({
         imageAlt: `${year} ${makeModel.trim()} (${chassisCode.trim().toUpperCase()})`,
         transit: {
           dealType,
-          destinationPortId: selectedPort.id,
+          destinationPortId: dealType === 'balance-release' ? selectedPort.id : 'worldwide',
           destinationPortLabel:
             dealType === 'balance-release'
               ? dispatchedPortText.trim() || `${selectedPort.name}, ${selectedPort.country}`
-              : `Ships to ${selectedPort.name} & Worldwide`,
+              : 'Ships Worldwide · Buyer Chooses Port',
           vesselName: vesselName.trim() || 'Weekly RoRo Sailing',
           arrivalStatus: arrivalStatus.trim() || 'Ready to Book',
           ...(dealType === 'balance-release' ? { trackingStage } : {}),
@@ -619,7 +620,9 @@ export function SellerPortal({
           inspectorSummary: inspectorSummary.trim(),
           bodyNotes: [
             `Verified auction grade ${grade}`,
-            `Prepared for ${selectedPort.name} (${selectedPort.country}) import rules`,
+            dealType === 'balance-release'
+              ? `Prepared for ${dispatchedPortText.trim() || selectedPort.name} import rules`
+              : 'Ships worldwide via RoRo or container to buyer-selected port',
           ],
         },
       };
@@ -1616,37 +1619,19 @@ export function SellerPortal({
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <div>
-                      <label className="block text-xs font-medium text-zinc-950 dark:text-zinc-200 mb-1">
-                        {dealType === 'balance-release'
-                          ? 'Dispatched Port (Where It Sailed)'
-                          : 'Primary Destination Port'}
-                      </label>
-                      <select
-                        value={destinationPortId}
-                        onChange={(e) => {
-                          const nextId = e.target.value;
-                          setDestinationPortId(nextId);
-                          const matched = DESTINATION_PORTS.find((p) => p.id === nextId);
-                          if (matched) {
-                            setCustomBalancePortMode(false);
-                            setDispatchedPortText(`${matched.name}, ${matched.country}`);
-                          }
-                        }}
-                        className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-950 dark:text-zinc-100"
-                      >
-                        {PORT_REGIONS.map((region) => (
-                          <optgroup key={region} label={region}>
-                            {DESTINATION_PORTS.filter((p) => p.region === region).map((port) => (
-                              <option key={port.id} value={port.id}>
-                                {port.name} ({port.country})
-                              </option>
-                            ))}
-                          </optgroup>
-                        ))}
-                      </select>
-                    </div>
+                  <div
+                    className={`grid grid-cols-1 ${dealType === 'direct-import' ? 'sm:grid-cols-3' : 'sm:grid-cols-2'} gap-4`}
+                  >
+                    {dealType === 'direct-import' && (
+                      <div>
+                        <label className="block text-xs font-medium text-zinc-950 dark:text-zinc-200 mb-1">
+                          Destination Port Coverage
+                        </label>
+                        <div className="px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-950/70 text-slate-700 dark:text-zinc-300">
+                          Ships Worldwide (Buyer chooses port)
+                        </div>
+                      </div>
+                    )}
                     <div>
                       <label className="block text-xs font-medium text-zinc-950 dark:text-zinc-200 mb-1">
                         Vessel / Schedule

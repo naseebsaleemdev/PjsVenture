@@ -58,12 +58,17 @@ export function ImportInquiryForm({
   useEffect(() => {
     if (selectedVehicleForBooking) {
       const isBal = selectedVehicleForBooking.transit.dealType === 'balance-release';
-      setDestinationPortId(selectedVehicleForBooking.transit.destinationPortId);
+      const hasKnownPort = DESTINATION_PORTS.some(
+        (p) => p.id === selectedVehicleForBooking.transit.destinationPortId,
+      );
+      if (isBal && hasKnownPort) {
+        setDestinationPortId(selectedVehicleForBooking.transit.destinationPortId);
+      }
       setRequestType(isBal ? 'Claim Port Balance Unit' : 'Book Direct Japan Import');
       setNotes(
         isBal
           ? `Claiming Port Balance-Release unit: ${selectedVehicleForBooking.year} ${selectedVehicleForBooking.makeModel} (${selectedVehicleForBooking.chassisCode}) — Remaining balance $${selectedVehicleForBooking.transit.balanceDueUsd.toLocaleString('en-US')}.`
-          : `Booking ${selectedVehicleForBooking.year} ${selectedVehicleForBooking.makeModel} (${selectedVehicleForBooking.chassisCode}) from Japan for import to Caribbean port.`,
+          : `Booking ${selectedVehicleForBooking.year} ${selectedVehicleForBooking.makeModel} (${selectedVehicleForBooking.chassisCode}) from Japan for worldwide export to my destination port.`,
       );
       setCreatedBooking(null);
     }
