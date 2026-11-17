@@ -19,12 +19,14 @@ export function PortTrackingProgress({
 
   if (variant === 'compact') {
     return (
-      <div className="rounded-lg border border-slate-200 bg-slate-50/80 p-3 space-y-2">
+      <div className="rounded-lg border border-slate-200 dark:border-zinc-800 bg-slate-50/80 dark:bg-zinc-900/80 p-3 space-y-2">
         <div className="flex items-center justify-between gap-2 text-[11px]">
-          <span className="font-medium text-slate-600">Shipment Tracker</span>
+          <span className="font-medium text-slate-600 dark:text-zinc-400">Shipment Tracker</span>
           <span
             className={`font-mono font-semibold ${
-              isReady ? 'text-emerald-800' : 'text-blue-900'
+              isReady
+                ? 'text-emerald-800 dark:text-emerald-400'
+                : 'text-blue-900 dark:text-blue-400'
             }`}
           >
             {activeStage}
@@ -40,14 +42,18 @@ export function PortTrackingProgress({
                 key={stage}
                 title={stage}
                 className={`h-1.5 rounded-sm transition-colors ${
-                  done ? (isReady ? 'bg-emerald-700' : 'bg-blue-900') : 'bg-slate-200'
+                  done
+                    ? isReady
+                      ? 'bg-emerald-700 dark:bg-emerald-500'
+                      : 'bg-blue-900 dark:bg-blue-500'
+                    : 'bg-slate-200 dark:bg-zinc-700'
                 }`}
               />
             );
           })}
         </div>
 
-        <div className="flex items-center justify-between gap-2 text-[10px] text-slate-500">
+        <div className="flex items-center justify-between gap-2 text-[10px] text-slate-500 dark:text-zinc-400">
           <span className="truncate">{transit.destinationPortLabel}</span>
           {formattedEta && <span className="font-mono shrink-0">ETA {formattedEta}</span>}
         </div>
@@ -56,13 +62,13 @@ export function PortTrackingProgress({
   }
 
   return (
-    <div className="rounded-xl border border-blue-200/80 bg-blue-50/40 p-4 space-y-3.5">
+    <div className="rounded-xl border border-blue-200/80 dark:border-zinc-700 bg-blue-50/40 dark:bg-zinc-900 p-4 space-y-3.5">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <div className="text-xs font-semibold text-zinc-950">
+          <div className="text-xs font-semibold text-zinc-950 dark:text-zinc-100">
             Live Port &amp; Pickup Tracker
           </div>
-          <div className="text-[11px] text-slate-600 mt-0.5">
+          <div className="text-[11px] text-slate-600 dark:text-zinc-400 mt-0.5">
             {transit.destinationPortLabel}
             {formattedEta ? ` · ETA ${formattedEta}` : ''}
           </div>
@@ -70,8 +76,8 @@ export function PortTrackingProgress({
         <span
           className={`font-mono text-xs font-semibold px-2.5 py-1 rounded-md border ${
             isReady
-              ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
-              : 'bg-white border-blue-200 text-blue-900'
+              ? 'bg-emerald-50 dark:bg-emerald-950/60 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300'
+              : 'bg-white dark:bg-zinc-800 border-blue-200 dark:border-zinc-700 text-blue-900 dark:text-blue-300'
           }`}
         >
           {activeStage}
@@ -79,10 +85,10 @@ export function PortTrackingProgress({
       </div>
 
       {/* Continuous Progress Bar */}
-      <div className="w-full h-2 rounded-full bg-slate-200 overflow-hidden">
+      <div className="w-full h-2 rounded-full bg-slate-200 dark:bg-zinc-800 overflow-hidden">
         <div
           className={`h-full transition-all duration-300 ${
-            isReady ? 'bg-emerald-700' : 'bg-blue-900'
+            isReady ? 'bg-emerald-700 dark:bg-emerald-500' : 'bg-blue-900 dark:bg-blue-500'
           }`}
           style={{ width: `${progressPercent}%` }}
         />
@@ -100,9 +106,9 @@ export function PortTrackingProgress({
                   className={`w-4 h-4 rounded-full inline-flex items-center justify-center text-[10px] font-mono shrink-0 ${
                     completed || current
                       ? isReady
-                        ? 'bg-emerald-700 text-white'
-                        : 'bg-blue-900 text-white'
-                      : 'bg-white border border-slate-300 text-slate-400'
+                        ? 'bg-emerald-700 dark:bg-emerald-500 text-white'
+                        : 'bg-blue-900 dark:bg-blue-500 text-white'
+                      : 'bg-white dark:bg-zinc-800 border border-slate-300 dark:border-zinc-700 text-slate-400 dark:text-zinc-500'
                   }`}
                 >
                   {completed || (current && isReady) ? (
@@ -114,10 +120,10 @@ export function PortTrackingProgress({
                 <span
                   className={`text-[11px] leading-tight truncate ${
                     current
-                      ? 'font-semibold text-zinc-950'
+                      ? 'font-semibold text-zinc-950 dark:text-zinc-100'
                       : completed
-                        ? 'font-medium text-slate-700'
-                        : 'text-slate-400'
+                        ? 'font-medium text-slate-700 dark:text-zinc-300'
+                        : 'text-slate-400 dark:text-zinc-500'
                   }`}
                 >
                   {stage}

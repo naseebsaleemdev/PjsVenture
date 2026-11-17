@@ -18,7 +18,7 @@ interface PortalUsersPanelProps {
   currentUserId: string;
   onCreateUser: (input: Omit<PortalUser, 'id' | 'createdAt'>) => Promise<void>;
   onUpdateUser: (id: string, updates: Partial<PortalUser>) => Promise<void>;
-  onDeleteUser: (id: string) => Promise<void>;
+  onRequestDeleteUser: (user: PortalUser) => void;
 }
 
 const ROLE_OPTIONS: {
@@ -127,7 +127,7 @@ export function PortalUsersPanel({
   currentUserId,
   onCreateUser,
   onUpdateUser,
-  onDeleteUser,
+  onRequestDeleteUser,
 }: PortalUsersPanelProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState('');
@@ -181,14 +181,12 @@ export function PortalUsersPanel({
     if (isEditingPrimaryOwner) return;
     setPermissions((prev) => {
       const next = { ...prev, [key]: !prev[key] };
-      // If write or delete is enabled, ensure read is also enabled for that module
       if ((key === 'inventoryWrite' || key === 'inventoryDelete') && next[key]) {
         next.inventoryRead = true;
       }
       if ((key === 'bookingsWrite' || key === 'bookingsDelete') && next[key]) {
         next.bookingsRead = true;
       }
-      // If read is unchecked, disable write and delete for that module
       if (key === 'inventoryRead' && !next.inventoryRead) {
         next.inventoryWrite = false;
         next.inventoryDelete = false;
@@ -258,14 +256,14 @@ export function PortalUsersPanel({
       {/* Left: Create / Edit User & Permissions Matrix */}
       <form
         onSubmit={handleSubmit}
-        className="lg:col-span-5 bg-white border border-slate-200 rounded-xl p-6 space-y-5"
+        className="lg:col-span-5 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl p-6 space-y-5"
       >
-        <div className="border-b border-slate-200 pb-3 flex items-start justify-between gap-3">
+        <div className="border-b border-slate-200 dark:border-zinc-800 pb-3 flex items-start justify-between gap-3">
           <div>
-            <h2 className="font-display text-lg font-semibold text-zinc-950">
+            <h2 className="font-display text-lg font-semibold text-zinc-950 dark:text-white">
               {editingId ? `Edit User — ${editingUser?.name}` : 'Create Team User'}
             </h2>
-            <p className="text-xs text-slate-500 mt-0.5">
+            <p className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
               Assign a role preset and customize exact module read/write access.
             </p>
           </div>
@@ -273,7 +271,7 @@ export function PortalUsersPanel({
             <button
               type="button"
               onClick={resetForm}
-              className="px-2.5 py-1 text-xs font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-md cursor-pointer shrink-0"
+              className="px-2.5 py-1 text-xs font-medium text-slate-600 dark:text-zinc-300 bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 rounded-md cursor-pointer shrink-0"
             >
               New User
             </button>
@@ -281,13 +279,13 @@ export function PortalUsersPanel({
         </div>
 
         {error && (
-          <p className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-3.5 py-2.5">
+          <p className="text-xs text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-800 rounded-lg px-3.5 py-2.5">
             {error}
           </p>
         )}
 
         {notice && (
-          <p className="text-xs text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg px-3.5 py-2.5 flex items-center gap-2">
+          <p className="text-xs text-emerald-800 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 rounded-lg px-3.5 py-2.5 flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4 shrink-0" aria-hidden="true" />
             <span>{notice}</span>
           </p>
@@ -295,31 +293,35 @@ export function PortalUsersPanel({
 
         <div className="space-y-3">
           <div>
-            <label className="block text-xs font-medium text-zinc-950 mb-1">Full Name *</label>
+            <label className="block text-xs font-medium text-zinc-950 dark:text-zinc-200 mb-1">
+              Full Name *
+            </label>
             <input
               type="text"
               required
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. Bilal Ahmed (Sales)"
-              className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 bg-white focus:outline-none focus:border-blue-900"
+              className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-950 dark:text-zinc-100 placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus:outline-none focus:border-blue-900 dark:focus:border-blue-500"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-zinc-950 mb-1">Login Email *</label>
+            <label className="block text-xs font-medium text-zinc-950 dark:text-zinc-200 mb-1">
+              Login Email *
+            </label>
             <input
               type="email"
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="staff@pjsventures.com"
-              className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 bg-white focus:outline-none focus:border-blue-900"
+              className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-950 dark:text-zinc-100 placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus:outline-none focus:border-blue-900 dark:focus:border-blue-500"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-zinc-950 mb-1">
+            <label className="block text-xs font-medium text-zinc-950 dark:text-zinc-200 mb-1">
               {editingId ? 'New Password (leave blank to keep current)' : 'Login Password (min 6 chars) *'}
             </label>
             <div className="relative">
@@ -330,13 +332,13 @@ export function PortalUsersPanel({
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder={editingId ? 'Leave empty to keep existing password' : 'Set login password'}
-                className="w-full pl-3 pr-9 py-2 text-sm rounded-lg border border-slate-300 bg-white focus:outline-none focus:border-blue-900"
+                className="w-full pl-3 pr-9 py-2 text-sm rounded-lg border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-950 dark:text-zinc-100 placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus:outline-none focus:border-blue-900 dark:focus:border-blue-500"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword((prev) => !prev)}
                 aria-label={showPassword ? 'Hide password' : 'Show password'}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-zinc-950 cursor-pointer"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-zinc-950 dark:hover:text-white cursor-pointer"
               >
                 {showPassword ? (
                   <EyeOff className="w-4 h-4" aria-hidden="true" />
@@ -349,11 +351,15 @@ export function PortalUsersPanel({
         </div>
 
         {/* Role Selector */}
-        <div className="space-y-2 pt-2 border-t border-slate-100">
+        <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-zinc-800">
           <div className="flex items-center justify-between">
-            <label className="text-xs font-medium text-zinc-950">Role Preset</label>
+            <label className="text-xs font-medium text-zinc-950 dark:text-zinc-200">
+              Role Preset
+            </label>
             {isEditingPrimaryOwner && (
-              <span className="text-[11px] text-blue-900 font-medium">Primary Owner locked to Admin</span>
+              <span className="text-[11px] text-blue-900 dark:text-blue-400 font-medium">
+                Primary Owner locked to Admin
+              </span>
             )}
           </div>
           <div className="grid grid-cols-3 gap-2">
@@ -367,8 +373,8 @@ export function PortalUsersPanel({
                   onClick={() => handleRoleSelect(item.role)}
                   className={`px-3 py-2 text-xs font-medium rounded-lg border transition-colors cursor-pointer disabled:opacity-60 ${
                     selected
-                      ? 'border-blue-900 bg-blue-900 text-white'
-                      : 'border-slate-300 bg-white text-slate-700 hover:border-blue-400'
+                      ? 'border-blue-900 dark:border-blue-500 bg-blue-900 dark:bg-blue-600 text-white'
+                      : 'border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-slate-700 dark:text-zinc-300 hover:border-blue-400 dark:hover:border-blue-500'
                   }`}
                 >
                   {item.role}
@@ -376,27 +382,29 @@ export function PortalUsersPanel({
               );
             })}
           </div>
-          <p className="text-[11px] text-slate-500">
+          <p className="text-[11px] text-slate-500 dark:text-zinc-400">
             {ROLE_OPTIONS.find((r) => r.role === role)?.summary}
           </p>
         </div>
 
         {/* Granular Permissions Matrix */}
-        <div className="space-y-4 pt-2 border-t border-slate-100">
-          <div className="text-xs font-semibold text-zinc-950">
+        <div className="space-y-4 pt-2 border-t border-slate-100 dark:border-zinc-800">
+          <div className="text-xs font-semibold text-zinc-950 dark:text-zinc-100">
             Module Access &amp; Permissions
           </div>
           {PERMISSION_GROUPS.map((group) => (
             <div key={group.title} className="space-y-2">
-              <div className="text-[11px] font-medium text-slate-500 uppercase tracking-wider">
+              <div className="text-[11px] font-medium text-slate-500 dark:text-zinc-400 uppercase tracking-wider">
                 {group.title}
               </div>
               <div className="space-y-1.5">
                 {group.items.map((perm) => (
                   <label
                     key={perm.key}
-                    className={`flex items-start gap-2.5 p-2.5 rounded-lg border border-slate-200 bg-slate-50/70 ${
-                      isEditingPrimaryOwner ? 'opacity-70 cursor-not-allowed' : 'hover:bg-slate-50 cursor-pointer'
+                    className={`flex items-start gap-2.5 p-2.5 rounded-lg border border-slate-200 dark:border-zinc-800 bg-slate-50/70 dark:bg-zinc-950/60 ${
+                      isEditingPrimaryOwner
+                        ? 'opacity-70 cursor-not-allowed'
+                        : 'hover:bg-slate-50 dark:hover:bg-zinc-800/60 cursor-pointer'
                     }`}
                   >
                     <input
@@ -404,11 +412,15 @@ export function PortalUsersPanel({
                       checked={permissions[perm.key]}
                       disabled={isEditingPrimaryOwner}
                       onChange={() => togglePermission(perm.key)}
-                      className="mt-0.5 w-4 h-4 rounded border-slate-300 text-blue-900 focus:ring-blue-900"
+                      className="mt-0.5 w-4 h-4 rounded border-slate-300 dark:border-zinc-700 text-blue-900 dark:text-blue-500 focus:ring-blue-900"
                     />
                     <div className="min-w-0">
-                      <div className="text-xs font-medium text-zinc-950">{perm.label}</div>
-                      <div className="text-[11px] text-slate-500 leading-snug">{perm.hint}</div>
+                      <div className="text-xs font-medium text-zinc-950 dark:text-zinc-100">
+                        {perm.label}
+                      </div>
+                      <div className="text-[11px] text-slate-500 dark:text-zinc-400 leading-snug">
+                        {perm.hint}
+                      </div>
                     </div>
                   </label>
                 ))}
@@ -418,10 +430,12 @@ export function PortalUsersPanel({
         </div>
 
         {!isEditingPrimaryOwner && (
-          <label className="flex items-center justify-between p-3 rounded-lg border border-slate-200 bg-white cursor-pointer">
+          <label className="flex items-center justify-between p-3 rounded-lg border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 cursor-pointer">
             <div>
-              <div className="text-xs font-medium text-zinc-950">Account Active</div>
-              <div className="text-[11px] text-slate-500">
+              <div className="text-xs font-medium text-zinc-950 dark:text-zinc-100">
+                Account Active
+              </div>
+              <div className="text-[11px] text-slate-500 dark:text-zinc-400">
                 Allow this user to sign in to the Seller Portal
               </div>
             </div>
@@ -429,7 +443,7 @@ export function PortalUsersPanel({
               type="checkbox"
               checked={active}
               onChange={(e) => setActive(e.target.checked)}
-              className="w-4 h-4 rounded border-slate-300 text-blue-900"
+              className="w-4 h-4 rounded border-slate-300 dark:border-zinc-700 text-blue-900 dark:text-blue-500"
             />
           </label>
         )}
@@ -437,7 +451,7 @@ export function PortalUsersPanel({
         <button
           type="submit"
           disabled={saving}
-          className="w-full inline-flex items-center justify-center gap-2 py-2.5 text-sm font-medium text-white bg-blue-900 hover:bg-blue-950 disabled:bg-slate-400 rounded-lg transition-colors cursor-pointer"
+          className="w-full inline-flex items-center justify-center gap-2 py-2.5 text-sm font-medium text-white bg-blue-900 hover:bg-blue-950 dark:bg-blue-600 dark:hover:bg-blue-500 disabled:bg-slate-400 dark:disabled:bg-zinc-700 rounded-lg transition-colors cursor-pointer"
         >
           <Plus className="w-4 h-4" aria-hidden="true" />
           <span>
@@ -451,64 +465,66 @@ export function PortalUsersPanel({
       </form>
 
       {/* Right: Team Users List */}
-      <div className="lg:col-span-7 bg-white border border-slate-200 rounded-xl overflow-hidden">
-        <div className="p-5 border-b border-slate-200 flex items-center justify-between gap-3">
+      <div className="lg:col-span-7 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl overflow-hidden">
+        <div className="p-5 border-b border-slate-200 dark:border-zinc-800 flex items-center justify-between gap-3">
           <div>
-            <h2 className="font-display text-lg font-semibold text-zinc-950">
+            <h2 className="font-display text-lg font-semibold text-zinc-950 dark:text-white">
               Team Accounts &amp; Role Access
             </h2>
-            <p className="text-xs text-slate-500 mt-0.5">
+            <p className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
               Each user signs in at #portal using their own email and password.
             </p>
           </div>
-          <span className="font-mono text-xs text-slate-500 tabular-nums">
+          <span className="font-mono text-xs text-slate-500 dark:text-zinc-400 tabular-nums">
             {users.length} {users.length === 1 ? 'account' : 'accounts'}
           </span>
         </div>
 
-        <div className="divide-y divide-slate-100">
+        <div className="divide-y divide-slate-100 dark:divide-zinc-800">
           {users.map((user) => {
             const isSelf = user.id === currentUserId;
             return (
               <div
                 key={user.id}
-                className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50/70"
+                className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50/70 dark:hover:bg-zinc-800/40"
               >
                 <div className="min-w-0 space-y-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-sm font-semibold text-zinc-950 truncate">
+                    <span className="text-sm font-semibold text-zinc-950 dark:text-white truncate">
                       {user.name}
                     </span>
                     <span
                       className={`px-2 py-0.5 text-[11px] font-medium rounded border ${
                         user.role === 'Admin'
-                          ? 'bg-blue-50 text-blue-900 border-blue-200'
+                          ? 'bg-blue-50 dark:bg-blue-950/60 text-blue-900 dark:text-blue-300 border-blue-200 dark:border-blue-800'
                           : user.role === 'Editor'
-                            ? 'bg-amber-50 text-amber-800 border-amber-200'
-                            : 'bg-slate-100 text-slate-700 border-slate-200'
+                            ? 'bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border-amber-200 dark:border-amber-800'
+                            : 'bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300 border-slate-200 dark:border-zinc-700'
                       }`}
                     >
                       {user.role}
                     </span>
                     {user.isPrimaryOwner && (
-                      <span className="inline-flex items-center gap-1 text-[11px] font-medium text-blue-900">
+                      <span className="inline-flex items-center gap-1 text-[11px] font-medium text-blue-900 dark:text-blue-400">
                         <Shield className="w-3 h-3" aria-hidden="true" />
                         Owner
                       </span>
                     )}
                     {isSelf && (
-                      <span className="text-[11px] text-slate-500">(You)</span>
+                      <span className="text-[11px] text-slate-500 dark:text-zinc-400">(You)</span>
                     )}
                     {!user.active && (
-                      <span className="px-2 py-0.5 text-[11px] font-medium rounded bg-red-50 text-red-700 border border-red-200">
+                      <span className="px-2 py-0.5 text-[11px] font-medium rounded bg-red-50 dark:bg-red-950/60 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800">
                         Suspended
                       </span>
                     )}
                   </div>
 
-                  <div className="text-xs font-mono text-slate-600 truncate">{user.email}</div>
+                  <div className="text-xs font-mono text-slate-600 dark:text-zinc-300 truncate">
+                    {user.email}
+                  </div>
 
-                  <div className="text-[11px] text-slate-500">
+                  <div className="text-[11px] text-slate-500 dark:text-zinc-400">
                     {formatPermissionSummary(user)}
                   </div>
                 </div>
@@ -517,7 +533,7 @@ export function PortalUsersPanel({
                   <button
                     type="button"
                     onClick={() => startEdit(user)}
-                    className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-blue-900 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+                    className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-blue-900 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/50 rounded-lg transition-colors cursor-pointer"
                   >
                     <Pencil className="w-3.5 h-3.5" aria-hidden="true" />
                     <span>Edit Access</span>
@@ -529,20 +545,20 @@ export function PortalUsersPanel({
                         type="button"
                         onClick={() => onUpdateUser(user.id, { active: !user.active })}
                         title={user.active ? 'Suspend account' : 'Reactivate account'}
-                        className="p-2 text-slate-500 hover:text-zinc-950 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+                        className="p-2 text-slate-500 dark:text-zinc-400 hover:text-zinc-950 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-zinc-800 rounded-lg transition-colors cursor-pointer"
                       >
                         {user.active ? (
                           <UserX className="w-4 h-4" aria-hidden="true" />
                         ) : (
-                          <UserCheck className="w-4 h-4 text-emerald-700" aria-hidden="true" />
+                          <UserCheck className="w-4 h-4 text-emerald-700 dark:text-emerald-400" aria-hidden="true" />
                         )}
                       </button>
 
                       <button
                         type="button"
-                        onClick={() => onDeleteUser(user.id)}
+                        onClick={() => onRequestDeleteUser(user)}
                         aria-label={`Delete user ${user.name}`}
-                        className="p-2 text-slate-400 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                        className="p-2 text-slate-400 dark:text-zinc-500 hover:text-red-700 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-lg transition-colors cursor-pointer"
                       >
                         <Trash2 className="w-4 h-4" aria-hidden="true" />
                       </button>

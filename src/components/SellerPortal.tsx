@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import {
+  AlertTriangle,
   ArrowLeft,
   Car,
   ChevronLeft,
@@ -10,11 +11,13 @@ import {
   LogOut,
   Mail,
   MessageSquare,
+  Moon,
   Pencil,
   Phone,
   Plus,
   Search,
   ShieldCheck,
+  Sun,
   Trash2,
   Upload,
   Users,
@@ -36,6 +39,7 @@ import {
   savePortalPassword,
   writePortalSession,
 } from '../lib/portalAuth.ts';
+import { readPortalDarkMode, writePortalDarkMode } from '../lib/portalTheme.ts';
 import type {
   BookingRequest,
   ExportVehicle,
@@ -52,6 +56,13 @@ import { PortalUsersPanel } from './PortalUsersPanel';
 import { ResilientImage } from './ResilientImage';
 
 type PortalTab = 'inventory' | 'add-vehicle' | 'bookings' | 'videos' | 'users';
+
+type DeleteTarget =
+  | { kind: 'vehicle'; id: string; title: string; subtitle: string }
+  | { kind: 'booking'; id: string; title: string; subtitle: string }
+  | { kind: 'video'; id: string; title: string; subtitle: string }
+  | { kind: 'user'; id: string; title: string; subtitle: string }
+  | null;
 
 interface SellerPortalProps {
   vehicles: ExportVehicle[];
@@ -155,9 +166,43 @@ export function SellerPortal({
   const activeUser = currentUser && (currentUser.active || currentUser.isPrimaryOwner) ? currentUser : null;
 
   const [activeTab, setActiveTab] = useState<PortalTab>('inventory');
+  const [isDarkMode, setIsDarkMode] = useState<boolean>(() => readPortalDarkMode());
+  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [editingVehicleId, setEditingVehicleId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [modeFilter, setModeFilter] = useState<'all' | ListingMode>('all');
+
+  const handleToggleDarkMode = () => {
+    setIsDarkMode((prev) => {
+      const next = !prev;
+      writePortalDarkMode(next);
+      return next;
+    });
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    setDeleteError(null);
+    try {
+      if (deleteTarget.kind === 'vehicle') {
+        await onDeleteVehicle(deleteTarget.id);
+      } else if (deleteTarget.kind === 'booking') {
+        await onDeleteBooking(deleteTarget.id);
+      } else if (deleteTarget.kind === 'video') {
+        await onDeleteVideo(deleteTarget.id);
+      } else if (deleteTarget.kind === 'user') {
+        await onDeleteUser(deleteTarget.id);
+      }
+      setDeleteTarget(null);
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : 'Could not complete deletion.');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   // Leads & CRM State
   const [crmSearch, setCrmSearch] = useState('');
@@ -650,6 +695,8 @@ export function SellerPortal({
     return (
       <PortalLoginGate
         users={users}
+        isDarkMode={isDarkMode}
+        onToggleDarkMode={handleToggleDarkMode}
         onAuthenticated={handleAuthenticated}
         onSyncOwnerPassword={async (userId, nextPw) => {
           await onUpdateUser(userId, { password: nextPw });
@@ -685,26 +732,28 @@ export function SellerPortal({
   const safePreviewIndex = previewIndex < galleryImages.length ? previewIndex : 0;
 
   return (
-    <div className="min-h-screen bg-slate-50 text-zinc-950 flex flex-col lg:flex-row">
+    <div
+      className={`${isDarkMode ? 'dark [color-scheme:dark]' : ''} min-h-screen bg-slate-50 dark:bg-zinc-950 text-zinc-950 dark:text-zinc-100 flex flex-col lg:flex-row transition-colors`}
+    >
       {/* Left Portal Sidebar */}
-      <aside className="w-full lg:w-64 bg-white border-b lg:border-b-0 lg:border-r border-slate-200 flex flex-col justify-between shrink-0">
+      <aside className="w-full lg:w-64 bg-white dark:bg-zinc-900 border-b lg:border-b-0 lg:border-r border-slate-200 dark:border-zinc-800 flex flex-col justify-between shrink-0">
         <div>
-          <div className="h-16 px-6 flex items-center justify-between border-b border-slate-200">
-            <span className="font-display text-lg font-bold tracking-tight text-zinc-950">
+          <div className="h-16 px-6 flex items-center justify-between border-b border-slate-200 dark:border-zinc-800">
+            <span className="font-display text-lg font-bold tracking-tight text-zinc-950 dark:text-white">
               PJS Ventures Portal
             </span>
           </div>
 
-          <div className="mx-4 mt-4 p-3 rounded-lg bg-slate-50 border border-slate-200">
+          <div className="mx-4 mt-4 p-3 rounded-lg bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800">
             <div className="flex items-center justify-between gap-2">
-              <span className="text-xs font-semibold text-zinc-950 truncate">
+              <span className="text-xs font-semibold text-zinc-950 dark:text-zinc-100 truncate">
                 {activeUser.name}
               </span>
-              <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-blue-50 text-blue-900 border border-blue-200 shrink-0">
+              <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-blue-50 dark:bg-blue-950/60 text-blue-900 dark:text-blue-300 border border-blue-200 dark:border-blue-800 shrink-0">
                 {activeUser.role}
               </span>
             </div>
-            <div className="text-[11px] font-mono text-slate-500 truncate mt-0.5">
+            <div className="text-[11px] font-mono text-slate-500 dark:text-zinc-400 truncate mt-0.5">
               {activeUser.email}
             </div>
           </div>
@@ -716,8 +765,8 @@ export function SellerPortal({
                 onClick={() => setActiveTab('inventory')}
                 className={`w-full flex items-center gap-3 px-3.5 py-2.5 text-sm font-medium rounded-lg transition-colors cursor-pointer ${
                   effectiveTab === 'inventory'
-                    ? 'bg-blue-50 text-blue-900'
-                    : 'text-slate-600 hover:bg-slate-50 hover:text-zinc-950'
+                    ? 'bg-blue-50 dark:bg-blue-950/60 text-blue-900 dark:text-blue-300'
+                    : 'text-slate-600 dark:text-zinc-400 hover:bg-slate-50 dark:hover:bg-zinc-800/60 hover:text-zinc-950 dark:hover:text-white'
                 }`}
               >
                 <Car className="w-4 h-4 shrink-0" aria-hidden="true" />
@@ -734,8 +783,8 @@ export function SellerPortal({
                 }}
                 className={`w-full flex items-center gap-3 px-3.5 py-2.5 text-sm font-medium rounded-lg transition-colors cursor-pointer ${
                   effectiveTab === 'add-vehicle'
-                    ? 'bg-blue-50 text-blue-900'
-                    : 'text-slate-600 hover:bg-slate-50 hover:text-zinc-950'
+                    ? 'bg-blue-50 dark:bg-blue-950/60 text-blue-900 dark:text-blue-300'
+                    : 'text-slate-600 dark:text-zinc-400 hover:bg-slate-50 dark:hover:bg-zinc-800/60 hover:text-zinc-950 dark:hover:text-white'
                 }`}
               >
                 <Plus className="w-4 h-4 shrink-0" aria-hidden="true" />
@@ -749,15 +798,15 @@ export function SellerPortal({
                 onClick={() => setActiveTab('bookings')}
                 className={`w-full flex items-center justify-between px-3.5 py-2.5 text-sm font-medium rounded-lg transition-colors cursor-pointer ${
                   effectiveTab === 'bookings'
-                    ? 'bg-blue-50 text-blue-900'
-                    : 'text-slate-600 hover:bg-slate-50 hover:text-zinc-950'
+                    ? 'bg-blue-50 dark:bg-blue-950/60 text-blue-900 dark:text-blue-300'
+                    : 'text-slate-600 dark:text-zinc-400 hover:bg-slate-50 dark:hover:bg-zinc-800/60 hover:text-zinc-950 dark:hover:text-white'
                 }`}
               >
                 <span className="flex items-center gap-3">
                   <Users className="w-4 h-4 shrink-0" aria-hidden="true" />
                   <span>Leads &amp; CRM</span>
                 </span>
-                <span className="font-mono text-xs tabular-nums text-slate-500">
+                <span className="font-mono text-xs tabular-nums text-slate-500 dark:text-zinc-400">
                   {bookings.length}
                 </span>
               </button>
@@ -769,15 +818,15 @@ export function SellerPortal({
                 onClick={() => setActiveTab('videos')}
                 className={`w-full flex items-center justify-between px-3.5 py-2.5 text-sm font-medium rounded-lg transition-colors cursor-pointer ${
                   effectiveTab === 'videos'
-                    ? 'bg-blue-50 text-blue-900'
-                    : 'text-slate-600 hover:bg-slate-50 hover:text-zinc-950'
+                    ? 'bg-blue-50 dark:bg-blue-950/60 text-blue-900 dark:text-blue-300'
+                    : 'text-slate-600 dark:text-zinc-400 hover:bg-slate-50 dark:hover:bg-zinc-800/60 hover:text-zinc-950 dark:hover:text-white'
                 }`}
               >
                 <span className="flex items-center gap-3">
                   <Film className="w-4 h-4 shrink-0" aria-hidden="true" />
                   <span>Unloading Videos</span>
                 </span>
-                <span className="font-mono text-xs tabular-nums text-slate-500">
+                <span className="font-mono text-xs tabular-nums text-slate-500 dark:text-zinc-400">
                   {videos.length}
                 </span>
               </button>
@@ -789,15 +838,15 @@ export function SellerPortal({
                 onClick={() => setActiveTab('users')}
                 className={`w-full flex items-center justify-between px-3.5 py-2.5 text-sm font-medium rounded-lg transition-colors cursor-pointer ${
                   effectiveTab === 'users'
-                    ? 'bg-blue-50 text-blue-900'
-                    : 'text-slate-600 hover:bg-slate-50 hover:text-zinc-950'
+                    ? 'bg-blue-50 dark:bg-blue-950/60 text-blue-900 dark:text-blue-300'
+                    : 'text-slate-600 dark:text-zinc-400 hover:bg-slate-50 dark:hover:bg-zinc-800/60 hover:text-zinc-950 dark:hover:text-white'
                 }`}
               >
                 <span className="flex items-center gap-3">
                   <ShieldCheck className="w-4 h-4 shrink-0" aria-hidden="true" />
                   <span>Team &amp; Users</span>
                 </span>
-                <span className="font-mono text-xs tabular-nums text-slate-500">
+                <span className="font-mono text-xs tabular-nums text-slate-500 dark:text-zinc-400">
                   {users.length}
                 </span>
               </button>
@@ -805,11 +854,11 @@ export function SellerPortal({
           </nav>
         </div>
 
-        <div className="p-4 border-t border-slate-200 space-y-2">
+        <div className="p-4 border-t border-slate-200 dark:border-zinc-800 space-y-2">
           <button
             type="button"
             onClick={onExitPortal}
-            className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-zinc-950 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer"
+            className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-zinc-950 dark:text-zinc-100 bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 rounded-lg transition-colors cursor-pointer"
           >
             <ArrowLeft className="w-4 h-4" aria-hidden="true" />
             <span>Back to Public Storefront</span>
@@ -825,7 +874,7 @@ export function SellerPortal({
               setPwConfirm('');
               setPwModalOpen(true);
             }}
-            className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+            className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 text-xs font-medium text-slate-700 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-800 rounded-lg transition-colors cursor-pointer"
           >
             <KeyRound className="w-3.5 h-3.5" aria-hidden="true" />
             <span>Change Password</span>
@@ -834,7 +883,7 @@ export function SellerPortal({
           <button
             type="button"
             onClick={handleSignOut}
-            className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 text-xs font-medium text-slate-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+            className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 text-xs font-medium text-slate-600 dark:text-zinc-400 hover:text-red-700 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-lg transition-colors cursor-pointer"
           >
             <LogOut className="w-3.5 h-3.5" aria-hidden="true" />
             <span>Sign Out</span>
@@ -845,13 +894,13 @@ export function SellerPortal({
       {/* Main Portal Workspace */}
       <div className="flex-1 min-w-0 flex flex-col">
         {/* Top Portal Bar */}
-        <header className="h-16 bg-white border-b border-slate-200 px-6 flex items-center justify-between gap-4">
-          <div className="text-sm text-slate-500 truncate">
+        <header className="h-16 bg-white dark:bg-zinc-900 border-b border-slate-200 dark:border-zinc-800 px-6 flex items-center justify-between gap-4">
+          <div className="text-sm text-slate-500 dark:text-zinc-400 truncate">
             <span>Seller Portal</span>
             <span className="mx-2" aria-hidden="true">
               /
             </span>
-            <span className="font-medium text-zinc-950">
+            <span className="font-medium text-zinc-950 dark:text-white">
               {effectiveTab === 'inventory'
                 ? 'Vehicle Inventory'
                 : effectiveTab === 'add-vehicle'
@@ -866,39 +915,62 @@ export function SellerPortal({
             </span>
           </div>
 
-          {effectiveTab !== 'add-vehicle' && perms.inventoryWrite && (
+          <div className="flex items-center gap-2.5 shrink-0">
             <button
               type="button"
-              onClick={() => {
-                resetFormForNew();
-                setActiveTab('add-vehicle');
-              }}
-              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-900 hover:bg-blue-950 rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+              onClick={handleToggleDarkMode}
+              aria-label={isDarkMode ? 'Switch CRM to Light Mode' : 'Switch CRM to Dark Mode'}
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-700 dark:text-zinc-200 bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 border border-slate-200 dark:border-zinc-700 rounded-lg transition-colors whitespace-nowrap cursor-pointer"
             >
-              <Plus className="w-4 h-4" aria-hidden="true" />
-              <span>Add Vehicle</span>
+              {isDarkMode ? (
+                <>
+                  <Sun className="w-3.5 h-3.5 text-amber-400" aria-hidden="true" />
+                  <span>Light</span>
+                </>
+              ) : (
+                <>
+                  <Moon className="w-3.5 h-3.5 text-slate-600" aria-hidden="true" />
+                  <span>Dark Mode</span>
+                </>
+              )}
             </button>
-          )}
+
+            {effectiveTab !== 'add-vehicle' && perms.inventoryWrite && (
+              <button
+                type="button"
+                onClick={() => {
+                  resetFormForNew();
+                  setActiveTab('add-vehicle');
+                }}
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-900 hover:bg-blue-950 dark:bg-blue-700 dark:hover:bg-blue-600 rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+              >
+                <Plus className="w-4 h-4" aria-hidden="true" />
+                <span>Add Vehicle</span>
+              </button>
+            )}
+          </div>
         </header>
 
         <div className="p-6 sm:p-8 max-w-6xl w-full mx-auto space-y-8">
           {/* KPI Summary Strip */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="bg-white border border-slate-200 rounded-xl p-5">
-              <div className="text-xs text-slate-500">Total Listed Cars</div>
-              <div className="mt-1 font-mono text-2xl font-semibold text-zinc-950 tabular-nums">
+            <div className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl p-5">
+              <div className="text-xs text-slate-500 dark:text-zinc-400">Total Listed Cars</div>
+              <div className="mt-1 font-mono text-2xl font-semibold text-zinc-950 dark:text-white tabular-nums">
                 {vehicles.length}
               </div>
             </div>
-            <div className="bg-white border border-slate-200 rounded-xl p-5">
-              <div className="text-xs text-slate-500">Direct Japan Bookings</div>
-              <div className="mt-1 font-mono text-2xl font-semibold text-zinc-950 tabular-nums">
+            <div className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl p-5">
+              <div className="text-xs text-slate-500 dark:text-zinc-400">Direct Japan Bookings</div>
+              <div className="mt-1 font-mono text-2xl font-semibold text-zinc-950 dark:text-white tabular-nums">
                 {directCount}
               </div>
             </div>
-            <div className="bg-white border border-slate-200 rounded-xl p-5">
-              <div className="text-xs text-slate-500">Port Balance-Release Units</div>
-              <div className="mt-1 font-mono text-2xl font-semibold text-blue-900 tabular-nums">
+            <div className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl p-5">
+              <div className="text-xs text-slate-500 dark:text-zinc-400">
+                Port Balance-Release Units
+              </div>
+              <div className="mt-1 font-mono text-2xl font-semibold text-blue-900 dark:text-blue-400 tabular-nums">
                 {balanceCount}
               </div>
             </div>
@@ -906,18 +978,22 @@ export function SellerPortal({
               <button
                 type="button"
                 onClick={() => setActiveTab('bookings')}
-                className="bg-white border border-slate-200 hover:border-blue-900 rounded-xl p-5 text-left transition-colors cursor-pointer"
+                className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 hover:border-blue-900 dark:hover:border-blue-500 rounded-xl p-5 text-left transition-colors cursor-pointer"
               >
-                <div className="text-xs text-slate-500">Form Leads CRM ({bookings.length})</div>
-                <div className="mt-1 font-mono text-2xl font-semibold text-zinc-950 tabular-nums">
+                <div className="text-xs text-slate-500 dark:text-zinc-400">
+                  Form Leads CRM ({bookings.length})
+                </div>
+                <div className="mt-1 font-mono text-2xl font-semibold text-zinc-950 dark:text-white tabular-nums">
                   {pendingBookingsCount}{' '}
-                  <span className="text-xs font-sans font-normal text-blue-900">pending review</span>
+                  <span className="text-xs font-sans font-normal text-blue-900 dark:text-blue-400">
+                    pending review
+                  </span>
                 </div>
               </button>
             ) : (
-              <div className="bg-white border border-slate-200 rounded-xl p-5">
-                <div className="text-xs text-slate-500">Your Access Role</div>
-                <div className="mt-1 font-display text-xl font-semibold text-zinc-950">
+              <div className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl p-5">
+                <div className="text-xs text-slate-500 dark:text-zinc-400">Your Access Role</div>
+                <div className="mt-1 font-display text-xl font-semibold text-zinc-950 dark:text-white">
                   {activeUser.role}
                 </div>
               </div>
@@ -926,9 +1002,9 @@ export function SellerPortal({
 
           {/* TAB 1: INVENTORY TABLE */}
           {effectiveTab === 'inventory' && perms.inventoryRead && (
-            <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-              <div className="p-5 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="inline-flex items-center gap-1 p-1 bg-slate-100 rounded-lg self-start">
+            <div className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl overflow-hidden">
+              <div className="p-5 border-b border-slate-200 dark:border-zinc-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="inline-flex items-center gap-1 p-1 bg-slate-100 dark:bg-zinc-800 rounded-lg self-start">
                   {(
                     [
                       { id: 'all', label: 'All Listed' },
@@ -942,8 +1018,8 @@ export function SellerPortal({
                       onClick={() => setModeFilter(item.id)}
                       className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors cursor-pointer ${
                         modeFilter === item.id
-                          ? 'bg-white text-zinc-950 shadow-sm'
-                          : 'text-slate-600 hover:text-zinc-950'
+                          ? 'bg-white dark:bg-zinc-900 text-zinc-950 dark:text-white shadow-sm'
+                          : 'text-slate-600 dark:text-zinc-400 hover:text-zinc-950 dark:hover:text-white'
                       }`}
                     >
                       {item.label}
@@ -953,7 +1029,7 @@ export function SellerPortal({
 
                 <div className="relative w-full sm:w-64">
                   <Search
-                    className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
+                    className="w-4 h-4 text-slate-400 dark:text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
                     aria-hidden="true"
                   />
                   <input
@@ -961,19 +1037,21 @@ export function SellerPortal({
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Filter by model or chassis..."
-                    className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:border-blue-900"
+                    className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-950 dark:text-zinc-100 placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus:outline-none focus:border-blue-900 dark:focus:border-blue-500"
                   />
                 </div>
               </div>
 
               {filteredInventory.length === 0 ? (
                 <div className="p-10 text-center space-y-3">
-                  <p className="text-sm text-slate-600">No vehicles match your current filter.</p>
+                  <p className="text-sm text-slate-600 dark:text-zinc-400">
+                    No vehicles match your current filter.
+                  </p>
                   {perms.inventoryWrite && (
                     <button
                       type="button"
                       onClick={() => setActiveTab('add-vehicle')}
-                      className="px-4 py-2 text-sm font-medium text-white bg-blue-900 rounded-lg cursor-pointer"
+                      className="px-4 py-2 text-sm font-medium text-white bg-blue-900 dark:bg-blue-700 rounded-lg cursor-pointer"
                     >
                       Add Your First Vehicle
                     </button>
@@ -983,7 +1061,7 @@ export function SellerPortal({
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse">
                     <thead>
-                      <tr className="border-b border-slate-200 bg-slate-50 text-xs font-medium text-slate-500">
+                      <tr className="border-b border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-950 text-xs font-medium text-slate-500 dark:text-zinc-400">
                         <th className="py-3 px-4">Vehicle</th>
                         <th className="py-3 px-4">Type &amp; Port</th>
                         <th className="py-3 px-4 text-right">CIF / Balance Due</th>
@@ -993,14 +1071,17 @@ export function SellerPortal({
                         )}
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100 text-sm">
+                    <tbody className="divide-y divide-slate-100 dark:divide-zinc-800 text-sm">
                       {filteredInventory.map((vehicle) => {
                         const isBal = vehicle.transit.dealType === 'balance-release';
                         return (
-                          <tr key={vehicle.id} className="hover:bg-slate-50/70">
+                          <tr
+                            key={vehicle.id}
+                            className="hover:bg-slate-50/70 dark:hover:bg-zinc-800/40"
+                          >
                             <td className="py-3 px-4">
                               <div className="flex items-center gap-3">
-                                <div className="w-14 h-10 rounded overflow-hidden bg-slate-100 border border-slate-200 shrink-0">
+                                <div className="w-14 h-10 rounded overflow-hidden bg-slate-100 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 shrink-0">
                                   <ResilientImage
                                     src={vehicle.image}
                                     alt={vehicle.imageAlt}
@@ -1009,10 +1090,10 @@ export function SellerPortal({
                                   />
                                 </div>
                                 <div className="min-w-0">
-                                  <div className="font-medium text-zinc-950 truncate">
+                                  <div className="font-medium text-zinc-950 dark:text-zinc-100 truncate">
                                     {vehicle.year} {vehicle.makeModel}
                                   </div>
-                                  <div className="text-xs text-slate-500 font-mono">
+                                  <div className="text-xs text-slate-500 dark:text-zinc-400 font-mono">
                                     {vehicle.chassisCode} · Grade {vehicle.inspection.overallGrade} ·{' '}
                                     {getVehicleImages(vehicle).length} photos
                                   </div>
@@ -1021,10 +1102,10 @@ export function SellerPortal({
                             </td>
 
                             <td className="py-3 px-4 min-w-[240px]">
-                              <div className="text-xs font-medium text-zinc-950">
+                              <div className="text-xs font-medium text-zinc-950 dark:text-zinc-100">
                                 {isBal ? 'Port Balance Deal' : 'Direct Japan Import'}
                               </div>
-                              <div className="text-xs text-slate-500">
+                              <div className="text-xs text-slate-500 dark:text-zinc-400">
                                 {vehicle.transit.destinationPortLabel}
                               </div>
                               {isBal && (
@@ -1059,7 +1140,7 @@ export function SellerPortal({
                                           },
                                         });
                                       }}
-                                      className="w-full px-2 py-1 text-[11px] font-medium rounded border border-blue-200 bg-blue-50/70 text-blue-900 cursor-pointer"
+                                      className="w-full px-2 py-1 text-[11px] font-medium rounded border border-blue-200 dark:border-blue-800 bg-blue-50/70 dark:bg-blue-950/60 text-blue-900 dark:text-blue-200 cursor-pointer"
                                     >
                                       {PORT_TRACKING_STAGES.map((stage) => (
                                         <option key={stage} value={stage}>
@@ -1073,11 +1154,11 @@ export function SellerPortal({
                             </td>
 
                             <td className="py-3 px-4 text-right font-mono tabular-nums">
-                              <div className="font-semibold text-zinc-950">
+                              <div className="font-semibold text-zinc-950 dark:text-white">
                                 {formatAutoPrice(vehicle.transit.balanceDueUsd, 'USD')}
                               </div>
                               {isBal && (
-                                <div className="text-[11px] text-emerald-800">
+                                <div className="text-[11px] text-emerald-800 dark:text-emerald-400">
                                   Paid -{formatAutoPrice(vehicle.transit.priorDepositUsd, 'USD')}
                                 </div>
                               )}
@@ -1094,7 +1175,7 @@ export function SellerPortal({
                                       e.target.value as VehicleStatus,
                                     )
                                   }
-                                  className="px-2.5 py-1.5 text-xs font-medium rounded-md border border-slate-200 bg-white text-zinc-950"
+                                  className="px-2.5 py-1.5 text-xs font-medium rounded-md border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-950 dark:text-zinc-100"
                                 >
                                   <option value="Available">Available</option>
                                   <option value="Booked">Booked</option>
@@ -1102,7 +1183,7 @@ export function SellerPortal({
                                   <option value="Cleared">Cleared</option>
                                 </select>
                               ) : (
-                                <span className="inline-block px-2.5 py-1 text-xs font-medium rounded-md border border-slate-200 bg-slate-50 text-slate-700">
+                                <span className="inline-block px-2.5 py-1 text-xs font-medium rounded-md border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-950 text-slate-700 dark:text-zinc-300">
                                   {vehicle.status}
                                 </span>
                               )}
@@ -1116,7 +1197,7 @@ export function SellerPortal({
                                       type="button"
                                       onClick={() => startEditVehicle(vehicle)}
                                       aria-label={`Edit ${vehicle.makeModel}`}
-                                      className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-blue-900 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+                                      className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-blue-900 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/50 rounded-lg transition-colors cursor-pointer"
                                     >
                                       <Pencil className="w-3.5 h-3.5" aria-hidden="true" />
                                       <span>Edit</span>
@@ -1125,9 +1206,17 @@ export function SellerPortal({
                                   {perms.inventoryDelete && (
                                     <button
                                       type="button"
-                                      onClick={() => onDeleteVehicle(vehicle.id)}
+                                      onClick={() => {
+                                        setDeleteError(null);
+                                        setDeleteTarget({
+                                          kind: 'vehicle',
+                                          id: vehicle.id,
+                                          title: `${vehicle.year} ${vehicle.makeModel}`,
+                                          subtitle: `${vehicle.chassisCode} · ${vehicle.transit.destinationPortLabel}`,
+                                        });
+                                      }}
                                       aria-label={`Delete ${vehicle.makeModel}`}
-                                      className="p-2 text-slate-400 hover:text-red-700 rounded-lg hover:bg-red-50 transition-colors cursor-pointer"
+                                      className="p-2 text-slate-400 dark:text-zinc-500 hover:text-red-700 dark:hover:text-red-400 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors cursor-pointer"
                                     >
                                       <Trash2 className="w-4 h-4" />
                                     </button>
@@ -1149,16 +1238,16 @@ export function SellerPortal({
           {effectiveTab === 'add-vehicle' && perms.inventoryWrite && (
             <form
               onSubmit={handleSaveVehicleSubmit}
-              className="bg-white border border-slate-200 rounded-xl p-6 sm:p-8 space-y-6"
+              className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl p-6 sm:p-8 space-y-6"
             >
-              <div className="border-b border-slate-200 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="border-b border-slate-200 dark:border-zinc-800 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
-                  <h2 className="font-display text-xl font-semibold text-zinc-950">
+                  <h2 className="font-display text-xl font-semibold text-zinc-950 dark:text-white">
                     {editingVehicleId
                       ? `Edit Vehicle — ${year} ${makeModel}`
                       : 'Add Vehicle to Storefront'}
                   </h2>
-                  <p className="text-sm text-slate-600 mt-1">
+                  <p className="text-sm text-slate-600 dark:text-zinc-400 mt-1">
                     {editingVehicleId
                       ? 'Update any specs, photos, price, or switch this car between Direct Japan Import and Port Balance-Release.'
                       : 'Publish a standard car for direct Japan-to-worldwide booking, or list an in-transit Port Balance-Release unit.'}
@@ -1171,7 +1260,7 @@ export function SellerPortal({
                       resetFormForNew();
                       setActiveTab('inventory');
                     }}
-                    className="px-3 py-1.5 text-xs font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg self-start cursor-pointer"
+                    className="px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-zinc-300 bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 rounded-lg self-start cursor-pointer"
                   >
                     Exit Edit Mode
                   </button>
@@ -1179,7 +1268,7 @@ export function SellerPortal({
               </div>
 
               {formError && (
-                <p className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-4 py-3">
+                <p className="text-xs text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/60 rounded-lg px-4 py-3">
                   {formError}
                 </p>
               )}
@@ -1187,7 +1276,7 @@ export function SellerPortal({
               {/* Multi-Photo Upload, Carousel Preview & Gallery Manager */}
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
                 <div className="lg:col-span-5 space-y-3">
-                  <div className="relative aspect-[4/3] rounded-xl overflow-hidden border border-slate-200 bg-slate-100">
+                  <div className="relative aspect-[4/3] rounded-xl overflow-hidden border border-slate-200 dark:border-zinc-800 bg-slate-100 dark:bg-zinc-950">
                     {galleryImages.length > 0 ? (
                       <ResilientImage
                         src={galleryImages[safePreviewIndex]}
@@ -1196,9 +1285,9 @@ export function SellerPortal({
                         className="w-full h-full object-cover"
                       />
                     ) : (
-                      <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center text-slate-500 space-y-2">
-                        <Upload className="w-7 h-7 text-slate-400" aria-hidden="true" />
-                        <div className="text-xs font-medium text-zinc-950">
+                      <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center text-slate-500 dark:text-zinc-400 space-y-2">
+                        <Upload className="w-7 h-7 text-slate-400 dark:text-zinc-500" aria-hidden="true" />
+                        <div className="text-xs font-medium text-zinc-950 dark:text-zinc-100">
                           No photos selected yet
                         </div>
                         <p className="text-[11px] leading-relaxed max-w-[240px]">
@@ -1241,7 +1330,7 @@ export function SellerPortal({
                   {/* Gallery Thumbnails */}
                   {galleryImages.length > 0 && (
                     <div>
-                      <div className="flex items-center justify-between text-[11px] text-slate-500 mb-1.5">
+                      <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-zinc-400 mb-1.5">
                         <span>Carousel Gallery ({galleryImages.length} photos)</span>
                         <span>Click any photo to make Feature</span>
                       </div>
@@ -1250,7 +1339,9 @@ export function SellerPortal({
                           <div
                             key={`${imgSrc}-${idx}`}
                             className={`relative aspect-[4/3] rounded-lg overflow-hidden border ${
-                              idx === 0 ? 'border-blue-900 ring-2 ring-blue-900/20' : 'border-slate-200'
+                              idx === 0
+                                ? 'border-blue-900 dark:border-blue-500 ring-2 ring-blue-900/20 dark:ring-blue-500/30'
+                                : 'border-slate-200 dark:border-zinc-700'
                             }`}
                           >
                             <button
@@ -1269,7 +1360,7 @@ export function SellerPortal({
                             <span
                               className={`absolute bottom-1 left-1 px-1.5 py-0.5 rounded text-[10px] font-medium pointer-events-none ${
                                 idx === 0
-                                  ? 'bg-blue-900 text-white'
+                                  ? 'bg-blue-900 dark:bg-blue-700 text-white'
                                   : 'bg-zinc-950/70 text-white'
                               }`}
                             >
@@ -1289,7 +1380,7 @@ export function SellerPortal({
                     </div>
                   )}
 
-                  <label className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-medium text-zinc-950 bg-slate-100 hover:bg-slate-200 rounded-lg cursor-pointer transition-colors">
+                  <label className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-medium text-zinc-950 dark:text-zinc-100 bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 rounded-lg cursor-pointer transition-colors">
                     <Upload className="w-4 h-4" aria-hidden="true" />
                     <span>Upload Multiple Car Photos</span>
                     <input
@@ -1307,12 +1398,12 @@ export function SellerPortal({
                       value={customImageUrl}
                       onChange={(e) => setCustomImageUrl(e.target.value)}
                       placeholder="Paste extra photo URL..."
-                      className="flex-1 px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 bg-white"
+                      className="flex-1 px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-950 dark:text-zinc-100 placeholder:text-slate-400 dark:placeholder:text-zinc-500"
                     />
                     <button
                       type="button"
                       onClick={handleAddImageUrl}
-                      className="px-3 py-1.5 text-xs font-medium text-zinc-950 bg-slate-100 hover:bg-slate-200 rounded-lg cursor-pointer"
+                      className="px-3 py-1.5 text-xs font-medium text-zinc-950 dark:text-zinc-100 bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 rounded-lg cursor-pointer"
                     >
                       Add
                     </button>
@@ -1322,7 +1413,7 @@ export function SellerPortal({
                 <div className="lg:col-span-7 space-y-5">
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div>
-                      <label className="block text-xs font-medium text-zinc-950 mb-1">
+                      <label className="block text-xs font-medium text-zinc-950 dark:text-zinc-200 mb-1">
                         Listing Mode
                       </label>
                       <select
@@ -1345,7 +1436,7 @@ export function SellerPortal({
                             setVesselName('Next Weekly RoRo Sailing');
                           }
                         }}
-                        className="w-full px-3 py-2.5 text-sm rounded-lg border border-slate-300 bg-white"
+                        className="w-full px-3 py-2.5 text-sm rounded-lg border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-950 dark:text-zinc-100"
                       >
                         <option value="direct-import">
                           Direct Japan Import
@@ -1357,7 +1448,7 @@ export function SellerPortal({
                     </div>
 
                     <div>
-                      <label className="block text-xs font-medium text-zinc-950 mb-1">
+                      <label className="block text-xs font-medium text-zinc-950 dark:text-zinc-200 mb-1">
                         Vehicle Category
                       </label>
                       <select
@@ -1365,7 +1456,7 @@ export function SellerPortal({
                         onChange={(e) =>
                           setCategory(e.target.value as Exclude<VehicleCategory, 'All Stock'>)
                         }
-                        className="w-full px-3 py-2.5 text-sm rounded-lg border border-slate-300 bg-white"
+                        className="w-full px-3 py-2.5 text-sm rounded-lg border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-950 dark:text-zinc-100"
                       >
                         <option value="Hybrids">Hybrids</option>
                         <option value="SUVs & 4x4">SUVs & 4x4</option>
@@ -1375,13 +1466,13 @@ export function SellerPortal({
                     </div>
 
                     <div>
-                      <label className="block text-xs font-medium text-zinc-950 mb-1">
+                      <label className="block text-xs font-medium text-zinc-950 dark:text-zinc-200 mb-1">
                         Availability Status
                       </label>
                       <select
                         value={vehicleStatus}
                         onChange={(e) => setVehicleStatus(e.target.value as VehicleStatus)}
-                        className="w-full px-3 py-2.5 text-sm rounded-lg border border-slate-300 bg-white"
+                        className="w-full px-3 py-2.5 text-sm rounded-lg border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-950 dark:text-zinc-100"
                       >
                         <option value="Available">Available</option>
                         <option value="Booked">Booked</option>
@@ -1393,7 +1484,7 @@ export function SellerPortal({
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-medium text-zinc-950 mb-1">
+                      <label className="block text-xs font-medium text-zinc-950 dark:text-zinc-200 mb-1">
                         Make & Model *
                       </label>
                       <input
@@ -1401,11 +1492,11 @@ export function SellerPortal({
                         value={makeModel}
                         onChange={(e) => setMakeModel(e.target.value)}
                         placeholder="e.g. Honda Vezel Hybrid"
-                        className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300"
+                        className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-950 dark:text-zinc-100 placeholder:text-slate-400 dark:placeholder:text-zinc-500"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-zinc-950 mb-1">
+                      <label className="block text-xs font-medium text-zinc-950 dark:text-zinc-200 mb-1">
                         Trim / Grade Package
                       </label>
                       <input
@@ -1413,34 +1504,36 @@ export function SellerPortal({
                         value={trim}
                         onChange={(e) => setTrim(e.target.value)}
                         placeholder="e.g. Z Play Package"
-                        className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300"
+                        className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-950 dark:text-zinc-100 placeholder:text-slate-400 dark:placeholder:text-zinc-500"
                       />
                     </div>
                   </div>
 
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                     <div>
-                      <label className="block text-xs font-medium text-zinc-950 mb-1">Year</label>
+                      <label className="block text-xs font-medium text-zinc-950 dark:text-zinc-200 mb-1">
+                        Year
+                      </label>
                       <input
                         type="number"
                         value={year}
                         onChange={(e) => setYear(Number(e.target.value))}
-                        className="w-full px-3 py-2 text-sm font-mono rounded-lg border border-slate-300"
+                        className="w-full px-3 py-2 text-sm font-mono rounded-lg border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-950 dark:text-zinc-100"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-zinc-950 mb-1">
+                      <label className="block text-xs font-medium text-zinc-950 dark:text-zinc-200 mb-1">
                         Mileage (km)
                       </label>
                       <input
                         type="number"
                         value={mileageKm}
                         onChange={(e) => setMileageKm(Number(e.target.value))}
-                        className="w-full px-3 py-2 text-sm font-mono rounded-lg border border-slate-300"
+                        className="w-full px-3 py-2 text-sm font-mono rounded-lg border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-950 dark:text-zinc-100"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-zinc-950 mb-1">
+                      <label className="block text-xs font-medium text-zinc-950 dark:text-zinc-200 mb-1">
                         Chassis Code *
                       </label>
                       <input
@@ -1448,17 +1541,17 @@ export function SellerPortal({
                         value={chassisCode}
                         onChange={(e) => setChassisCode(e.target.value)}
                         placeholder="RV5-104921"
-                        className="w-full px-3 py-2 text-sm font-mono rounded-lg border border-slate-300"
+                        className="w-full px-3 py-2 text-sm font-mono rounded-lg border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-950 dark:text-zinc-100 placeholder:text-slate-400 dark:placeholder:text-zinc-500"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-zinc-950 mb-1">
+                      <label className="block text-xs font-medium text-zinc-950 dark:text-zinc-200 mb-1">
                         Auction Grade
                       </label>
                       <select
                         value={grade}
                         onChange={(e) => setGrade(e.target.value)}
-                        className="w-full px-3 py-2 text-sm font-mono rounded-lg border border-slate-300 bg-white"
+                        className="w-full px-3 py-2 text-sm font-mono rounded-lg border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-950 dark:text-zinc-100"
                       >
                         <option value="5.0">5.0</option>
                         <option value="4.5">4.5</option>
@@ -1470,20 +1563,24 @@ export function SellerPortal({
 
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                     <div>
-                      <label className="block text-xs font-medium text-zinc-950 mb-1">Engine</label>
+                      <label className="block text-xs font-medium text-zinc-950 dark:text-zinc-200 mb-1">
+                        Engine
+                      </label>
                       <input
                         type="text"
                         value={engine}
                         onChange={(e) => setEngine(e.target.value)}
-                        className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300"
+                        className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-950 dark:text-zinc-100"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-zinc-950 mb-1">Fuel</label>
+                      <label className="block text-xs font-medium text-zinc-950 dark:text-zinc-200 mb-1">
+                        Fuel
+                      </label>
                       <select
                         value={fuel}
                         onChange={(e) => setFuel(e.target.value as 'Hybrid' | 'Diesel' | 'Petrol')}
-                        className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 bg-white"
+                        className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-950 dark:text-zinc-100"
                       >
                         <option value="Hybrid">Hybrid</option>
                         <option value="Petrol">Petrol</option>
@@ -1491,11 +1588,13 @@ export function SellerPortal({
                       </select>
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-zinc-950 mb-1">Drive</label>
+                      <label className="block text-xs font-medium text-zinc-950 dark:text-zinc-200 mb-1">
+                        Drive
+                      </label>
                       <select
                         value={drive}
                         onChange={(e) => setDrive(e.target.value as '2WD' | '4WD' | 'AWD')}
-                        className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 bg-white"
+                        className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-950 dark:text-zinc-100"
                       >
                         <option value="2WD">2WD</option>
                         <option value="4WD">4WD</option>
@@ -1503,13 +1602,13 @@ export function SellerPortal({
                       </select>
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-zinc-950 mb-1">
+                      <label className="block text-xs font-medium text-zinc-950 dark:text-zinc-200 mb-1">
                         Steering
                       </label>
                       <select
                         value={steering}
                         onChange={(e) => setSteering(e.target.value as 'RHD' | 'LHD')}
-                        className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 bg-white"
+                        className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-950 dark:text-zinc-100"
                       >
                         <option value="RHD">RHD</option>
                         <option value="LHD">LHD</option>
@@ -1519,7 +1618,7 @@ export function SellerPortal({
 
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div>
-                      <label className="block text-xs font-medium text-zinc-950 mb-1">
+                      <label className="block text-xs font-medium text-zinc-950 dark:text-zinc-200 mb-1">
                         {dealType === 'balance-release'
                           ? 'Dispatched Port (Where It Sailed)'
                           : 'Primary Destination Port'}
@@ -1535,7 +1634,7 @@ export function SellerPortal({
                             setDispatchedPortText(`${matched.name}, ${matched.country}`);
                           }
                         }}
-                        className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 bg-white"
+                        className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-950 dark:text-zinc-100"
                       >
                         {PORT_REGIONS.map((region) => (
                           <optgroup key={region} label={region}>
@@ -1549,43 +1648,43 @@ export function SellerPortal({
                       </select>
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-zinc-950 mb-1">
+                      <label className="block text-xs font-medium text-zinc-950 dark:text-zinc-200 mb-1">
                         Vessel / Schedule
                       </label>
                       <input
                         type="text"
                         value={vesselName}
                         onChange={(e) => setVesselName(e.target.value)}
-                        className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300"
+                        className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-950 dark:text-zinc-100"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-zinc-950 mb-1">
+                      <label className="block text-xs font-medium text-zinc-950 dark:text-zinc-200 mb-1">
                         Availability / ETA Note
                       </label>
                       <input
                         type="text"
                         value={arrivalStatus}
                         onChange={(e) => setArrivalStatus(e.target.value)}
-                        className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300"
+                        className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-950 dark:text-zinc-100"
                       />
                     </div>
                   </div>
 
                   {dealType === 'balance-release' && (
-                    <div className="p-4 rounded-xl bg-blue-50/70 border border-blue-200 space-y-3">
+                    <div className="p-4 rounded-xl bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/60 space-y-3">
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div className="text-xs font-semibold text-blue-900">
+                        <div className="text-xs font-semibold text-blue-900 dark:text-blue-300">
                           Port Balance Dispatch &amp; Port Arrival Date
                         </div>
-                        <span className="text-[11px] text-slate-600">
+                        <span className="text-[11px] text-slate-600 dark:text-zinc-400">
                           Locks this vehicle&apos;s Freight Calculator to this port
                         </span>
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div className="space-y-2">
-                          <label className="block text-xs font-medium text-zinc-950 mb-1">
+                          <label className="block text-xs font-medium text-zinc-950 dark:text-zinc-200 mb-1">
                             Dispatched Destination Port
                           </label>
                           <select
@@ -1603,7 +1702,7 @@ export function SellerPortal({
                                 setDispatchedPortText(`${matched.name}, ${matched.country}`);
                               }
                             }}
-                            className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 bg-white"
+                            className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-950 dark:text-zinc-100"
                           >
                             {PORT_REGIONS.map((region) => (
                               <optgroup key={region} label={region}>
@@ -1623,31 +1722,31 @@ export function SellerPortal({
                               value={dispatchedPortText}
                               onChange={(e) => setDispatchedPortText(e.target.value)}
                               placeholder="Enter custom port & country..."
-                              className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 bg-white"
+                              className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-950 dark:text-zinc-100"
                             />
                           )}
                         </div>
 
                         <div>
-                          <label className="block text-xs font-medium text-zinc-950 mb-1">
+                          <label className="block text-xs font-medium text-zinc-950 dark:text-zinc-200 mb-1">
                             Expected Port Arrival Date (ETA)
                           </label>
                           <input
                             type="date"
                             value={etaDate}
                             onChange={(e) => setEtaDate(e.target.value)}
-                            className="w-full px-3 py-2 text-sm font-mono rounded-lg border border-slate-300 bg-white"
+                            className="w-full px-3 py-2 text-sm font-mono rounded-lg border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-950 dark:text-zinc-100"
                           />
                         </div>
                       </div>
 
                       {/* Visual Location & Status Tracking Bar Selector */}
-                      <div className="pt-3 border-t border-blue-200/80 space-y-3">
+                      <div className="pt-3 border-t border-blue-200/80 dark:border-blue-900/60 space-y-3">
                         <div className="flex flex-wrap items-center justify-between gap-2">
-                          <label className="text-xs font-medium text-zinc-950">
+                          <label className="text-xs font-medium text-zinc-950 dark:text-zinc-200">
                             Customer Tracking Stage (Visual Progress Bar)
                           </label>
-                          <span className="text-[11px] text-slate-500">
+                          <span className="text-[11px] text-slate-500 dark:text-zinc-400">
                             Displayed live on storefront car card &amp; detail page
                           </span>
                         </div>
@@ -1677,8 +1776,8 @@ export function SellerPortal({
                                 }}
                                 className={`px-3 py-2 text-xs font-medium rounded-lg border text-center transition-colors cursor-pointer ${
                                   active
-                                    ? 'border-blue-900 bg-blue-900 text-white'
-                                    : 'border-slate-300 bg-white text-slate-700 hover:border-blue-400'
+                                    ? 'border-blue-900 bg-blue-900 dark:border-blue-600 dark:bg-blue-700 text-white'
+                                    : 'border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-slate-700 dark:text-zinc-300 hover:border-blue-400 dark:hover:border-blue-500'
                                 }`}
                               >
                                 {stage}
@@ -1709,9 +1808,9 @@ export function SellerPortal({
                     </div>
                   )}
 
-                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 pt-2 border-t border-slate-200">
+                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 pt-2 border-t border-slate-200 dark:border-zinc-800">
                     <div>
-                      <label className="block text-xs font-medium text-zinc-950 mb-1">
+                      <label className="block text-xs font-medium text-zinc-950 dark:text-zinc-200 mb-1">
                         FOB Japan (USD)
                       </label>
                       <input
@@ -1725,11 +1824,11 @@ export function SellerPortal({
                           setFobUsd(nextFob);
                           setFullCifUsd(nextFob + selectedPort.roroUsd);
                         }}
-                        className="w-full px-3 py-2 text-sm font-mono rounded-lg border border-slate-300"
+                        className="w-full px-3 py-2 text-sm font-mono rounded-lg border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-950 dark:text-zinc-100"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-zinc-950 mb-1">
+                      <label className="block text-xs font-medium text-zinc-950 dark:text-zinc-200 mb-1">
                         Full CIF (USD)
                       </label>
                       <input
@@ -1741,13 +1840,13 @@ export function SellerPortal({
                           const raw = e.target.value;
                           setFullCifUsd(raw === '' ? 0 : Math.max(0, Math.round(Number(raw) || 0)));
                         }}
-                        className="w-full px-3 py-2 text-sm font-mono rounded-lg border border-slate-300"
+                        className="w-full px-3 py-2 text-sm font-mono rounded-lg border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-950 dark:text-zinc-100"
                       />
                     </div>
 
                     {dealType === 'balance-release' && (
                       <div>
-                        <label className="block text-xs font-medium text-zinc-950 mb-1">
+                        <label className="block text-xs font-medium text-zinc-950 dark:text-zinc-200 mb-1">
                           Prior Paid Deposit
                         </label>
                         <input
@@ -1761,16 +1860,16 @@ export function SellerPortal({
                               raw === '' ? 0 : Math.max(0, Math.round(Number(raw) || 0)),
                             );
                           }}
-                          className="w-full px-3 py-2 text-sm font-mono rounded-lg border border-slate-300"
+                          className="w-full px-3 py-2 text-sm font-mono rounded-lg border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-950 dark:text-zinc-100"
                         />
                       </div>
                     )}
 
                     <div>
-                      <div className="text-xs font-medium text-slate-500 mb-1">
+                      <div className="text-xs font-medium text-slate-500 dark:text-zinc-400 mb-1">
                         {dealType === 'balance-release' ? 'Balance Due' : 'Listed CIF Price'}
                       </div>
-                      <div className="px-3 py-2 text-sm font-mono font-semibold text-blue-900 bg-blue-50/70 border border-blue-200 rounded-lg tabular-nums">
+                      <div className="px-3 py-2 text-sm font-mono font-semibold text-blue-900 dark:text-blue-300 bg-blue-50/70 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800 rounded-lg tabular-nums">
                         ${computedBalanceUsd.toLocaleString('en-US')}
                       </div>
                     </div>
@@ -1778,7 +1877,7 @@ export function SellerPortal({
 
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div>
-                      <label className="block text-xs font-medium text-zinc-950 mb-1">
+                      <label className="block text-xs font-medium text-zinc-950 dark:text-zinc-200 mb-1">
                         Exterior Color
                       </label>
                       <input
@@ -1786,11 +1885,11 @@ export function SellerPortal({
                         value={color}
                         onChange={(e) => setColor(e.target.value)}
                         placeholder="e.g. Pearl White"
-                        className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300"
+                        className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-950 dark:text-zinc-100 placeholder:text-slate-400 dark:placeholder:text-zinc-500"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-zinc-950 mb-1">
+                      <label className="block text-xs font-medium text-zinc-950 dark:text-zinc-200 mb-1">
                         Volume CBM (m³)
                       </label>
                       <input
@@ -1800,11 +1899,11 @@ export function SellerPortal({
                         step={0.1}
                         value={cbm}
                         onChange={(e) => setCbm(Number(e.target.value))}
-                        className="w-full px-3 py-2 text-sm font-mono rounded-lg border border-slate-300"
+                        className="w-full px-3 py-2 text-sm font-mono rounded-lg border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-950 dark:text-zinc-100"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-zinc-950 mb-1">
+                      <label className="block text-xs font-medium text-zinc-950 dark:text-zinc-200 mb-1">
                         Auction House
                       </label>
                       <input
@@ -1812,20 +1911,20 @@ export function SellerPortal({
                         value={auctionHouse}
                         onChange={(e) => setAuctionHouse(e.target.value)}
                         placeholder="e.g. USS Tokyo"
-                        className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300"
+                        className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-950 dark:text-zinc-100 placeholder:text-slate-400 dark:placeholder:text-zinc-500"
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-xs font-medium text-zinc-950 mb-1">
+                    <label className="block text-xs font-medium text-zinc-950 dark:text-zinc-200 mb-1">
                       Auction & Condition Notes
                     </label>
                     <textarea
                       rows={3}
                       value={inspectorSummary}
                       onChange={(e) => setInspectorSummary(e.target.value)}
-                      className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300"
+                      className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-950 dark:text-zinc-100"
                     />
                   </div>
 
@@ -1836,14 +1935,14 @@ export function SellerPortal({
                         resetFormForNew();
                         setActiveTab('inventory');
                       }}
-                      className="px-4 py-2.5 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg cursor-pointer"
+                      className="px-4 py-2.5 text-sm font-medium text-slate-700 dark:text-zinc-300 bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 rounded-lg cursor-pointer"
                     >
                       Cancel
                     </button>
                     <button
                       type="submit"
                       disabled={saving}
-                      className="px-6 py-2.5 text-sm font-medium text-white bg-blue-900 hover:bg-blue-950 disabled:bg-slate-400 rounded-lg cursor-pointer"
+                      className="px-6 py-2.5 text-sm font-medium text-white bg-blue-900 hover:bg-blue-950 dark:bg-blue-700 dark:hover:bg-blue-600 disabled:bg-slate-400 dark:disabled:bg-zinc-700 rounded-lg cursor-pointer"
                     >
                       {saving
                         ? editingVehicleId
@@ -1862,13 +1961,13 @@ export function SellerPortal({
           {/* TAB 3: FORM LEADS & CLIENT CRM */}
           {effectiveTab === 'bookings' && perms.bookingsRead && (
             <div className="space-y-5">
-              <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
+              <div className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl p-5 space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div>
-                    <h2 className="font-display text-lg font-semibold text-zinc-950">
+                    <h2 className="font-display text-lg font-semibold text-zinc-950 dark:text-white">
                       Form Leads &amp; Client CRM ({bookings.length})
                     </h2>
-                    <p className="text-xs text-slate-500 mt-0.5">
+                    <p className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
                       Every inquiry from your Home Page form, Booking page, and Freight Calculator
                       lands here for follow-up. Confirming a deposit automatically marks linked
                       cars as Booked.
@@ -1880,7 +1979,7 @@ export function SellerPortal({
                       <button
                         type="button"
                         onClick={() => setShowManualLeadForm((prev) => !prev)}
-                        className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium text-white bg-blue-900 hover:bg-blue-950 rounded-lg cursor-pointer"
+                        className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium text-white bg-blue-900 hover:bg-blue-950 dark:bg-blue-700 dark:hover:bg-blue-600 rounded-lg cursor-pointer"
                       >
                         <Plus className="w-3.5 h-3.5" aria-hidden="true" />
                         <span>{showManualLeadForm ? 'Close Lead Form' : 'Add Manual Lead'}</span>
@@ -1891,7 +1990,7 @@ export function SellerPortal({
                       type="button"
                       onClick={handleExportLeadsCsv}
                       disabled={filteredLeads.length === 0}
-                      className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium text-zinc-950 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 rounded-lg cursor-pointer"
+                      className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium text-zinc-950 dark:text-zinc-100 bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 disabled:opacity-50 rounded-lg cursor-pointer"
                     >
                       <Download className="w-3.5 h-3.5" aria-hidden="true" />
                       <span>Export CSV</span>
@@ -1902,9 +2001,9 @@ export function SellerPortal({
                 {showManualLeadForm && perms.bookingsWrite && (
                   <form
                     onSubmit={handleCreateManualLeadSubmit}
-                    className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3"
+                    className="p-4 rounded-xl bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 space-y-3"
                   >
-                    <div className="text-xs font-semibold text-zinc-950">
+                    <div className="text-xs font-semibold text-zinc-950 dark:text-white">
                       Log New WhatsApp / Phone / Walk-In Lead
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -1914,7 +2013,7 @@ export function SellerPortal({
                         value={manualName}
                         onChange={(e) => setManualName(e.target.value)}
                         placeholder="Buyer Name *"
-                        className="px-3 py-2 text-sm rounded-lg border border-slate-300 bg-white"
+                        className="px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-950 dark:text-zinc-100 placeholder:text-slate-400 dark:placeholder:text-zinc-500"
                       />
                       <input
                         type="email"
@@ -1922,21 +2021,21 @@ export function SellerPortal({
                         value={manualEmail}
                         onChange={(e) => setManualEmail(e.target.value)}
                         placeholder="Buyer Email *"
-                        className="px-3 py-2 text-sm rounded-lg border border-slate-300 bg-white"
+                        className="px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-950 dark:text-zinc-100 placeholder:text-slate-400 dark:placeholder:text-zinc-500"
                       />
                       <input
                         type="tel"
                         value={manualPhone}
                         onChange={(e) => setManualPhone(e.target.value)}
                         placeholder="WhatsApp / Phone"
-                        className="px-3 py-2 text-sm rounded-lg border border-slate-300 bg-white"
+                        className="px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-950 dark:text-zinc-100 placeholder:text-slate-400 dark:placeholder:text-zinc-500"
                       />
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <select
                         value={manualPortId}
                         onChange={(e) => setManualPortId(e.target.value)}
-                        className="px-3 py-2 text-sm rounded-lg border border-slate-300 bg-white"
+                        className="px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-950 dark:text-zinc-100"
                       >
                         {PORT_REGIONS.map((region) => (
                           <optgroup key={region} label={region}>
@@ -1953,21 +2052,21 @@ export function SellerPortal({
                         value={manualVehicleTitle}
                         onChange={(e) => setManualVehicleTitle(e.target.value)}
                         placeholder="Vehicle Interested In (e.g. 2022 Hilux)"
-                        className="px-3 py-2 text-sm rounded-lg border border-slate-300 bg-white"
+                        className="px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-950 dark:text-zinc-100 placeholder:text-slate-400 dark:placeholder:text-zinc-500"
                       />
                       <input
                         type="text"
                         value={manualNotes}
                         onChange={(e) => setManualNotes(e.target.value)}
                         placeholder="Lead notes or budget..."
-                        className="px-3 py-2 text-sm rounded-lg border border-slate-300 bg-white"
+                        className="px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-950 dark:text-zinc-100 placeholder:text-slate-400 dark:placeholder:text-zinc-500"
                       />
                     </div>
                     <div className="flex justify-end">
                       <button
                         type="submit"
                         disabled={manualLeadSaving}
-                        className="px-4 py-2 text-xs font-medium text-white bg-blue-900 hover:bg-blue-950 rounded-lg cursor-pointer"
+                        className="px-4 py-2 text-xs font-medium text-white bg-blue-900 hover:bg-blue-950 dark:bg-blue-700 dark:hover:bg-blue-600 rounded-lg cursor-pointer"
                       >
                         {manualLeadSaving ? 'Saving Lead...' : 'Save Lead to CRM'}
                       </button>
@@ -1975,8 +2074,8 @@ export function SellerPortal({
                   </form>
                 )}
 
-                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pt-2 border-t border-slate-100">
-                  <div className="flex flex-wrap items-center gap-1 p-1 bg-slate-100 rounded-lg">
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pt-2 border-t border-slate-100 dark:border-zinc-800">
+                  <div className="flex flex-wrap items-center gap-1 p-1 bg-slate-100 dark:bg-zinc-800 rounded-lg">
                     {(
                       [
                         { id: 'all', label: 'All Leads' },
@@ -1993,8 +2092,8 @@ export function SellerPortal({
                         onClick={() => setCrmStageFilter(stage.id)}
                         className={`px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap cursor-pointer ${
                           crmStageFilter === stage.id
-                            ? 'bg-white text-zinc-950 shadow-sm'
-                            : 'text-slate-600 hover:text-zinc-950'
+                            ? 'bg-white dark:bg-zinc-900 text-zinc-950 dark:text-white shadow-sm'
+                            : 'text-slate-600 dark:text-zinc-400 hover:text-zinc-950 dark:hover:text-white'
                         }`}
                       >
                         {stage.label}
@@ -2004,7 +2103,7 @@ export function SellerPortal({
 
                   <div className="relative w-full lg:w-64">
                     <Search
-                      className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
+                      className="w-4 h-4 text-slate-400 dark:text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
                       aria-hidden="true"
                     />
                     <input
@@ -2012,14 +2111,14 @@ export function SellerPortal({
                       value={crmSearch}
                       onChange={(e) => setCrmSearch(e.target.value)}
                       placeholder="Search leads by name, phone..."
-                      className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:border-blue-900"
+                      className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-950 dark:text-zinc-100 placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus:outline-none focus:border-blue-900 dark:focus:border-blue-500"
                     />
                   </div>
                 </div>
               </div>
 
               {filteredLeads.length === 0 ? (
-                <div className="bg-white border border-slate-200 rounded-xl p-10 text-center text-sm text-slate-500">
+                <div className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl p-10 text-center text-sm text-slate-500 dark:text-zinc-400">
                   No leads match this stage or search query. Any form submission on the site appears
                   here automatically.
                 </div>
@@ -2036,39 +2135,44 @@ export function SellerPortal({
                     return (
                       <div
                         key={lead.id}
-                        className="bg-white border border-slate-200 rounded-xl p-5 sm:p-6 space-y-4"
+                        className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl p-5 sm:p-6 space-y-4"
                       >
                         <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
                           {/* Lead Identity & Contact Info */}
                           <div className="space-y-2 min-w-0 flex-1">
                             <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs">
-                              <span className="font-mono font-semibold text-blue-900">
+                              <span className="font-mono font-semibold text-blue-900 dark:text-blue-400">
                                 #{lead.id.toUpperCase()}
                               </span>
-                              <span aria-hidden="true" className="text-slate-300">
+                              <span aria-hidden="true" className="text-slate-300 dark:text-zinc-600">
                                 ·
                               </span>
-                              <span className="text-slate-500">
+                              <span className="text-slate-500 dark:text-zinc-400">
                                 {lead.leadSource || 'Website Booking Form'}
                               </span>
                               {submittedLabel && (
                                 <>
-                                  <span aria-hidden="true" className="text-slate-300">
+                                  <span
+                                    aria-hidden="true"
+                                    className="text-slate-300 dark:text-zinc-600"
+                                  >
                                     ·
                                   </span>
-                                  <span className="text-slate-500">{submittedLabel}</span>
+                                  <span className="text-slate-500 dark:text-zinc-400">
+                                    {submittedLabel}
+                                  </span>
                                 </>
                               )}
                             </div>
 
                             <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
-                              <h3 className="font-display text-lg font-semibold text-zinc-950">
+                              <h3 className="font-display text-lg font-semibold text-zinc-950 dark:text-white">
                                 {lead.buyerName}
                               </h3>
                               <div className="flex flex-wrap items-center gap-3 text-xs">
                                 <a
                                   href={`mailto:${lead.buyerEmail}`}
-                                  className="inline-flex items-center gap-1 text-blue-900 hover:underline"
+                                  className="inline-flex items-center gap-1 text-blue-900 dark:text-blue-400 hover:underline"
                                 >
                                   <Mail className="w-3.5 h-3.5" aria-hidden="true" />
                                   <span>{lead.buyerEmail}</span>
@@ -2077,9 +2181,12 @@ export function SellerPortal({
                                   <>
                                     <a
                                       href={`tel:${lead.buyerPhone}`}
-                                      className="inline-flex items-center gap-1 font-mono text-zinc-950 hover:underline"
+                                      className="inline-flex items-center gap-1 font-mono text-zinc-950 dark:text-zinc-200 hover:underline"
                                     >
-                                      <Phone className="w-3.5 h-3.5 text-slate-500" aria-hidden="true" />
+                                      <Phone
+                                        className="w-3.5 h-3.5 text-slate-500 dark:text-zinc-400"
+                                        aria-hidden="true"
+                                      />
                                       <span>{lead.buyerPhone}</span>
                                     </a>
                                     {phoneDigits.length >= 7 && (
@@ -2087,7 +2194,7 @@ export function SellerPortal({
                                         href={`https://wa.me/${phoneDigits}`}
                                         target="_blank"
                                         rel="noreferrer"
-                                        className="inline-flex items-center gap-1 text-emerald-800 font-medium hover:underline"
+                                        className="inline-flex items-center gap-1 text-emerald-800 dark:text-emerald-400 font-medium hover:underline"
                                       >
                                         <MessageSquare className="w-3.5 h-3.5" aria-hidden="true" />
                                         <span>WhatsApp</span>
@@ -2099,27 +2206,33 @@ export function SellerPortal({
                             </div>
 
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 text-xs">
-                              <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
-                                <div className="text-slate-500">Vehicle / Inquiry</div>
-                                <div className="font-medium text-zinc-950 mt-0.5">
+                              <div className="p-3 rounded-lg bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800">
+                                <div className="text-slate-500 dark:text-zinc-400">
+                                  Vehicle / Inquiry
+                                </div>
+                                <div className="font-medium text-zinc-950 dark:text-zinc-100 mt-0.5">
                                   {lead.vehicleTitle}
                                 </div>
-                                <div className="font-mono text-[11px] text-slate-500">
+                                <div className="font-mono text-[11px] text-slate-500 dark:text-zinc-400">
                                   {lead.chassisCode}
                                 </div>
                               </div>
-                              <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
-                                <div className="text-slate-500">Destination &amp; Mode</div>
-                                <div className="font-medium text-zinc-950 mt-0.5">
+                              <div className="p-3 rounded-lg bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800">
+                                <div className="text-slate-500 dark:text-zinc-400">
+                                  Destination &amp; Mode
+                                </div>
+                                <div className="font-medium text-zinc-950 dark:text-zinc-100 mt-0.5">
                                   {lead.destinationPortName}
                                 </div>
-                                <div className="text-[11px] text-slate-500">
+                                <div className="text-[11px] text-slate-500 dark:text-zinc-400">
                                   {lead.requestType} · {lead.shippingMethod}
                                 </div>
                               </div>
-                              <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
-                                <div className="text-slate-500">Quoted Value</div>
-                                <div className="font-mono text-sm font-semibold text-zinc-950 mt-0.5 tabular-nums">
+                              <div className="p-3 rounded-lg bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800">
+                                <div className="text-slate-500 dark:text-zinc-400">
+                                  Quoted Value
+                                </div>
+                                <div className="font-mono text-sm font-semibold text-zinc-950 dark:text-white mt-0.5 tabular-nums">
                                   {lead.quotedAmountUsd > 0
                                     ? `$${lead.quotedAmountUsd.toLocaleString('en-US')} USD`
                                     : 'Custom Quote'}
@@ -2127,8 +2240,10 @@ export function SellerPortal({
                               </div>
                             </div>
 
-                            <div className="text-xs text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-3.5 py-2.5 leading-relaxed">
-                              <span className="font-medium text-zinc-950">Buyer Message: </span>
+                            <div className="text-xs text-slate-700 dark:text-zinc-300 bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-lg px-3.5 py-2.5 leading-relaxed">
+                              <span className="font-medium text-zinc-950 dark:text-white">
+                                Buyer Message:{' '}
+                              </span>
                               {lead.notes}
                             </div>
                           </div>
@@ -2136,7 +2251,7 @@ export function SellerPortal({
                           {/* Stage Selector & Delete */}
                           <div className="flex sm:flex-row lg:flex-col items-stretch sm:items-center lg:items-end justify-between gap-2.5 shrink-0">
                             <div className="w-full sm:w-52">
-                              <label className="block text-[11px] font-medium text-slate-500 mb-1">
+                              <label className="block text-[11px] font-medium text-slate-500 dark:text-zinc-400 mb-1">
                                 Pipeline Stage
                               </label>
                               {perms.bookingsWrite ? (
@@ -2148,7 +2263,7 @@ export function SellerPortal({
                                       status: e.target.value as BookingRequest['status'],
                                     })
                                   }
-                                  className="w-full px-3 py-2 text-xs font-medium rounded-lg border border-slate-300 bg-white text-zinc-950"
+                                  className="w-full px-3 py-2 text-xs font-medium rounded-lg border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-950 dark:text-zinc-100"
                                 >
                                   <option value="Pending Review">Pending Review</option>
                                   <option value="Contacted">Contacted</option>
@@ -2157,7 +2272,7 @@ export function SellerPortal({
                                   <option value="Cancelled">Cancelled</option>
                                 </select>
                               ) : (
-                                <div className="px-3 py-2 text-xs font-medium rounded-lg border border-slate-200 bg-slate-50 text-slate-700">
+                                <div className="px-3 py-2 text-xs font-medium rounded-lg border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-950 text-slate-700 dark:text-zinc-300">
                                   {lead.status}
                                 </div>
                               )}
@@ -2166,9 +2281,17 @@ export function SellerPortal({
                             {perms.bookingsDelete && (
                               <button
                                 type="button"
-                                onClick={() => onDeleteBooking(lead.id)}
+                                onClick={() => {
+                                  setDeleteError(null);
+                                  setDeleteTarget({
+                                    kind: 'booking',
+                                    id: lead.id,
+                                    title: lead.buyerName,
+                                    subtitle: `#${lead.id.toUpperCase()} · ${lead.vehicleTitle}`,
+                                  });
+                                }}
                                 aria-label={`Delete lead ${lead.buyerName}`}
-                                className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                                className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-500 dark:text-zinc-400 hover:text-red-700 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-lg transition-colors cursor-pointer"
                               >
                                 <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
                                 <span>Delete Lead</span>
@@ -2178,7 +2301,7 @@ export function SellerPortal({
                         </div>
 
                         {/* Internal Seller Follow-Up Notes */}
-                        <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row gap-2.5">
+                        <div className="pt-3 border-t border-slate-100 dark:border-zinc-800 flex flex-col sm:flex-row gap-2.5">
                           <input
                             type="text"
                             aria-label={`Follow-up note for ${lead.buyerName}`}
@@ -2195,14 +2318,14 @@ export function SellerPortal({
                                 ? 'Add private CRM follow-up note (e.g. Sent proforma invoice on WhatsApp, waiting TT copy...)'
                                 : 'No internal follow-up notes'
                             }
-                            className="flex-1 px-3 py-2 text-xs rounded-lg border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:border-blue-900"
+                            className="flex-1 px-3 py-2 text-xs rounded-lg border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-950 text-zinc-950 dark:text-zinc-100 placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus:bg-white dark:focus:bg-zinc-900 focus:outline-none focus:border-blue-900 dark:focus:border-blue-500"
                           />
                           {perms.bookingsWrite && (
                             <button
                               type="button"
                               disabled={!hasNoteChanges || savingNoteId === lead.id}
                               onClick={() => handleSaveCrmNote(lead.id, lead.crmNotes || '')}
-                              className="px-4 py-2 text-xs font-medium rounded-lg bg-zinc-950 text-white hover:bg-zinc-800 disabled:bg-slate-200 disabled:text-slate-500 transition-colors cursor-pointer shrink-0"
+                              className="px-4 py-2 text-xs font-medium rounded-lg bg-zinc-950 dark:bg-blue-700 text-white hover:bg-zinc-800 dark:hover:bg-blue-600 disabled:bg-slate-200 dark:disabled:bg-zinc-800 disabled:text-slate-500 dark:disabled:text-zinc-500 transition-colors cursor-pointer shrink-0"
                             >
                               {savingNoteId === lead.id ? 'Saving...' : 'Save CRM Note'}
                             </button>
@@ -2221,25 +2344,25 @@ export function SellerPortal({
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
               <form
                 onSubmit={handleSaveVideoSubmit}
-                className="lg:col-span-5 bg-white border border-slate-200 rounded-xl p-6 space-y-4"
+                className="lg:col-span-5 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl p-6 space-y-4"
               >
-                <div className="border-b border-slate-200 pb-3">
-                  <h2 className="font-display text-lg font-semibold text-zinc-950">
+                <div className="border-b border-slate-200 dark:border-zinc-800 pb-3">
+                  <h2 className="font-display text-lg font-semibold text-zinc-950 dark:text-white">
                     Add Container Unloading Clip
                   </h2>
-                  <p className="text-xs text-slate-500 mt-1">
+                  <p className="text-xs text-slate-500 dark:text-zinc-400 mt-1">
                     Publish a new video reel to the home page container unloading showcase.
                   </p>
                 </div>
 
                 {videoFormError && (
-                  <p className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2.5">
+                  <p className="text-xs text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/60 rounded-lg px-3 py-2.5">
                     {videoFormError}
                   </p>
                 )}
 
                 <div>
-                  <label className="block text-xs font-medium text-zinc-950 mb-1">
+                  <label className="block text-xs font-medium text-zinc-950 dark:text-zinc-200 mb-1">
                     Clip Title *
                   </label>
                   <input
@@ -2247,13 +2370,13 @@ export function SellerPortal({
                     value={videoTitle}
                     onChange={(e) => setVideoTitle(e.target.value)}
                     placeholder="e.g. Toyota Prado 4x4 Rolling Off 40ft Ramp"
-                    className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300"
+                    className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-950 dark:text-zinc-100 placeholder:text-slate-400 dark:placeholder:text-zinc-500"
                   />
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-medium text-zinc-950 mb-1">
+                    <label className="block text-xs font-medium text-zinc-950 dark:text-zinc-200 mb-1">
                       Destination Port
                     </label>
                     <input
@@ -2261,17 +2384,17 @@ export function SellerPortal({
                       value={videoPortLabel}
                       onChange={(e) => setVideoPortLabel(e.target.value)}
                       placeholder="Port of Nassau, Bahamas"
-                      className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300"
+                      className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-950 dark:text-zinc-100"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-zinc-950 mb-1">
+                    <label className="block text-xs font-medium text-zinc-950 dark:text-zinc-200 mb-1">
                       Container Type
                     </label>
                     <select
                       value={videoContainerType}
                       onChange={(e) => setVideoContainerType(e.target.value)}
-                      className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 bg-white"
+                      className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-950 dark:text-zinc-100"
                     >
                       <option value="40ft High-Cube Container">40ft High-Cube Container</option>
                       <option value="20ft Dedicated Container">20ft Dedicated Container</option>
@@ -2282,7 +2405,7 @@ export function SellerPortal({
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div className="sm:col-span-2">
-                    <label className="block text-xs font-medium text-zinc-950 mb-1">
+                    <label className="block text-xs font-medium text-zinc-950 dark:text-zinc-200 mb-1">
                       Vehicle Summary
                     </label>
                     <input
@@ -2290,11 +2413,11 @@ export function SellerPortal({
                       value={videoVehicleSummary}
                       onChange={(e) => setVideoVehicleSummary(e.target.value)}
                       placeholder="e.g. 2021 Land Cruiser Prado TX"
-                      className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300"
+                      className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-950 dark:text-zinc-100 placeholder:text-slate-400 dark:placeholder:text-zinc-500"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-zinc-950 mb-1">
+                    <label className="block text-xs font-medium text-zinc-950 dark:text-zinc-200 mb-1">
                       Duration
                     </label>
                     <input
@@ -2302,16 +2425,16 @@ export function SellerPortal({
                       value={videoDurationLabel}
                       onChange={(e) => setVideoDurationLabel(e.target.value)}
                       placeholder="0:12"
-                      className="w-full px-3 py-2 text-sm font-mono rounded-lg border border-slate-300"
+                      className="w-full px-3 py-2 text-sm font-mono rounded-lg border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-950 dark:text-zinc-100"
                     />
                   </div>
                 </div>
 
                 <div className="space-y-2">
-                  <label className="block text-xs font-medium text-zinc-950">
+                  <label className="block text-xs font-medium text-zinc-950 dark:text-zinc-200">
                     Video Source (Upload MP4/WebM or Paste URL) *
                   </label>
-                  <label className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-medium text-zinc-950 bg-slate-100 hover:bg-slate-200 rounded-lg cursor-pointer transition-colors">
+                  <label className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-medium text-zinc-950 dark:text-zinc-100 bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 rounded-lg cursor-pointer transition-colors">
                     <Upload className="w-4 h-4" aria-hidden="true" />
                     <span>Upload MP4 / WebM Clip (max 8 MB)</span>
                     <input
@@ -2326,12 +2449,12 @@ export function SellerPortal({
                     value={videoUrl.startsWith('data:') ? 'Uploaded video clip attached' : videoUrl}
                     onChange={(e) => setVideoUrl(e.target.value)}
                     placeholder="https://...mp4 or YouTube URL"
-                    className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300"
+                    className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-950 dark:text-zinc-100 placeholder:text-slate-400 dark:placeholder:text-zinc-500"
                   />
                 </div>
 
                 <div>
-                  <div className="text-xs font-medium text-zinc-950 mb-1.5">
+                  <div className="text-xs font-medium text-zinc-950 dark:text-zinc-200 mb-1.5">
                     Thumbnail Poster Scene
                   </div>
                   <div className="grid grid-cols-3 gap-2">
@@ -2342,11 +2465,11 @@ export function SellerPortal({
                         onClick={() => setVideoPosterUrl(preset.src)}
                         className={`rounded-lg overflow-hidden border text-left cursor-pointer ${
                           videoPosterUrl === preset.src
-                            ? 'border-blue-900 ring-2 ring-blue-900/20'
-                            : 'border-slate-200'
+                            ? 'border-blue-900 dark:border-blue-500 ring-2 ring-blue-900/20 dark:ring-blue-500/30'
+                            : 'border-slate-200 dark:border-zinc-700'
                         }`}
                       >
-                        <div className="aspect-video bg-slate-100">
+                        <div className="aspect-video bg-slate-100 dark:bg-zinc-800">
                           <ResilientImage
                             src={preset.src}
                             alt={preset.label}
@@ -2354,7 +2477,7 @@ export function SellerPortal({
                             className="w-full h-full object-cover"
                           />
                         </div>
-                        <div className="px-1.5 py-1 text-[10px] font-medium text-zinc-950 truncate">
+                        <div className="px-1.5 py-1 text-[10px] font-medium text-zinc-950 dark:text-zinc-200 truncate">
                           {preset.label}
                         </div>
                       </button>
@@ -2365,40 +2488,40 @@ export function SellerPortal({
                 <button
                   type="submit"
                   disabled={videoSaving}
-                  className="w-full py-2.5 text-sm font-medium text-white bg-blue-900 hover:bg-blue-950 disabled:bg-slate-400 rounded-lg cursor-pointer"
+                  className="w-full py-2.5 text-sm font-medium text-white bg-blue-900 hover:bg-blue-950 dark:bg-blue-700 dark:hover:bg-blue-600 disabled:bg-slate-400 dark:disabled:bg-zinc-700 rounded-lg cursor-pointer"
                 >
                   {videoSaving ? 'Publishing Clip...' : 'Publish Unloading Video'}
                 </button>
               </form>
 
-              <div className="lg:col-span-7 bg-white border border-slate-200 rounded-xl overflow-hidden">
-                <div className="p-5 border-b border-slate-200 flex items-center justify-between">
+              <div className="lg:col-span-7 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl overflow-hidden">
+                <div className="p-5 border-b border-slate-200 dark:border-zinc-800 flex items-center justify-between">
                   <div>
-                    <h2 className="font-display text-lg font-semibold text-zinc-950">
+                    <h2 className="font-display text-lg font-semibold text-zinc-950 dark:text-white">
                       Published Unloading Clips
                     </h2>
-                    <p className="text-xs text-slate-500 mt-0.5">
+                    <p className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
                       Live in the Container Arrival & Unloading section on your Home Page.
                     </p>
                   </div>
-                  <span className="font-mono text-xs text-slate-500 tabular-nums">
+                  <span className="font-mono text-xs text-slate-500 dark:text-zinc-400 tabular-nums">
                     {videos.length} reels
                   </span>
                 </div>
 
                 {videos.length === 0 ? (
-                  <div className="p-10 text-center text-sm text-slate-500">
+                  <div className="p-10 text-center text-sm text-slate-500 dark:text-zinc-400">
                     No unloading videos published yet. Use the form on the left to add one.
                   </div>
                 ) : (
-                  <div className="divide-y divide-slate-100">
+                  <div className="divide-y divide-slate-100 dark:divide-zinc-800">
                     {videos.map((clip) => (
                       <div
                         key={clip.id}
-                        className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50/70"
+                        className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50/70 dark:hover:bg-zinc-800/40"
                       >
                         <div className="flex items-center gap-3.5 min-w-0">
-                          <div className="w-28 aspect-video rounded-lg overflow-hidden bg-slate-100 border border-slate-200 shrink-0">
+                          <div className="w-28 aspect-video rounded-lg overflow-hidden bg-slate-100 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 shrink-0">
                             <ResilientImage
                               src={clip.posterUrl}
                               alt={clip.title}
@@ -2407,13 +2530,13 @@ export function SellerPortal({
                             />
                           </div>
                           <div className="min-w-0">
-                            <div className="text-sm font-semibold text-zinc-950 truncate">
+                            <div className="text-sm font-semibold text-zinc-950 dark:text-white truncate">
                               {clip.title}
                             </div>
-                            <div className="text-xs text-blue-900 font-medium truncate mt-0.5">
+                            <div className="text-xs text-blue-900 dark:text-blue-400 font-medium truncate mt-0.5">
                               {clip.portLabel}
                             </div>
-                            <div className="text-xs text-slate-500 mt-0.5 truncate">
+                            <div className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5 truncate">
                               {clip.vehicleSummary} ·{' '}
                               <span className="font-mono tabular-nums">{clip.durationLabel}</span> ·{' '}
                               {clip.containerType}
@@ -2423,9 +2546,17 @@ export function SellerPortal({
 
                         <button
                           type="button"
-                          onClick={() => onDeleteVideo(clip.id)}
+                          onClick={() => {
+                            setDeleteError(null);
+                            setDeleteTarget({
+                              kind: 'video',
+                              id: clip.id,
+                              title: clip.title,
+                              subtitle: clip.portLabel,
+                            });
+                          }}
                           aria-label={`Delete ${clip.title}`}
-                          className="self-start sm:self-center inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors cursor-pointer shrink-0"
+                          className="self-start sm:self-center inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-500 dark:text-zinc-400 hover:text-red-700 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-lg transition-colors cursor-pointer shrink-0"
                         >
                           <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
                           <span>Delete</span>
@@ -2444,7 +2575,15 @@ export function SellerPortal({
               currentUserId={activeUser.id}
               onCreateUser={onCreateUser}
               onUpdateUser={onUpdateUser}
-              onDeleteUser={onDeleteUser}
+              onRequestDeleteUser={(user) => {
+                setDeleteError(null);
+                setDeleteTarget({
+                  kind: 'user',
+                  id: user.id,
+                  title: user.name,
+                  subtitle: `${user.email} (${user.role})`,
+                });
+              }}
             />
           )}
         </div>
@@ -2456,17 +2595,17 @@ export function SellerPortal({
           role="dialog"
           aria-modal="true"
           aria-label="Change Seller Portal Password"
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/50 backdrop-blur-xs"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/60 backdrop-blur-xs"
           onClick={() => setPwModalOpen(false)}
         >
           <div
-            className="w-full max-w-md bg-white border border-slate-200 rounded-xl p-6 space-y-4 shadow-lg"
+            className="w-full max-w-md bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl p-6 space-y-4 shadow-lg"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-zinc-800 pb-3">
               <div className="flex items-center gap-2.5">
-                <KeyRound className="w-4 h-4 text-blue-900" aria-hidden="true" />
-                <h2 className="font-display text-base font-semibold text-zinc-950">
+                <KeyRound className="w-4 h-4 text-blue-900 dark:text-blue-400" aria-hidden="true" />
+                <h2 className="font-display text-base font-semibold text-zinc-950 dark:text-white">
                   Change Your Password
                 </h2>
               </div>
@@ -2474,19 +2613,19 @@ export function SellerPortal({
                 type="button"
                 onClick={() => setPwModalOpen(false)}
                 aria-label="Close password modal"
-                className="p-1.5 text-slate-400 hover:text-zinc-950 rounded-lg cursor-pointer"
+                className="p-1.5 text-slate-400 dark:text-zinc-500 hover:text-zinc-950 dark:hover:text-white rounded-lg cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             {pwError && (
-              <p className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+              <p className="text-xs text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/60 rounded-lg px-3 py-2">
                 {pwError}
               </p>
             )}
             {pwSaved && (
-              <p className="text-xs text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
+              <p className="text-xs text-emerald-800 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900/60 rounded-lg px-3 py-2">
                 Password updated successfully. Use your new password next time you sign in.
               </p>
             )}
@@ -2526,7 +2665,7 @@ export function SellerPortal({
               className="space-y-3"
             >
               <div>
-                <label className="block text-xs font-medium text-zinc-950 mb-1">
+                <label className="block text-xs font-medium text-zinc-950 dark:text-zinc-200 mb-1">
                   Current Password
                 </label>
                 <input
@@ -2534,11 +2673,11 @@ export function SellerPortal({
                   required
                   value={pwCurrent}
                   onChange={(e) => setPwCurrent(e.target.value)}
-                  className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300"
+                  className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-950 dark:text-zinc-100"
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-zinc-950 mb-1">
+                <label className="block text-xs font-medium text-zinc-950 dark:text-zinc-200 mb-1">
                   New Password (min 6 chars)
                 </label>
                 <input
@@ -2547,11 +2686,11 @@ export function SellerPortal({
                   minLength={6}
                   value={pwNext}
                   onChange={(e) => setPwNext(e.target.value)}
-                  className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300"
+                  className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-950 dark:text-zinc-100"
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-zinc-950 mb-1">
+                <label className="block text-xs font-medium text-zinc-950 dark:text-zinc-200 mb-1">
                   Confirm New Password
                 </label>
                 <input
@@ -2560,25 +2699,123 @@ export function SellerPortal({
                   minLength={6}
                   value={pwConfirm}
                   onChange={(e) => setPwConfirm(e.target.value)}
-                  className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300"
+                  className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-950 dark:text-zinc-100"
                 />
               </div>
               <div className="flex justify-end gap-2 pt-2">
                 <button
                   type="button"
                   onClick={() => setPwModalOpen(false)}
-                  className="px-4 py-2 text-xs font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg cursor-pointer"
+                  className="px-4 py-2 text-xs font-medium text-slate-600 dark:text-zinc-300 bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 rounded-lg cursor-pointer"
                 >
                   Close
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 text-xs font-medium text-white bg-blue-900 hover:bg-blue-950 rounded-lg cursor-pointer"
+                  className="px-4 py-2 text-xs font-medium text-white bg-blue-900 hover:bg-blue-950 dark:bg-blue-700 dark:hover:bg-blue-600 rounded-lg cursor-pointer"
                 >
                   Update Password
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Unified Delete Confirmation Modal */}
+      {deleteTarget && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Confirm Deletion"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/60 backdrop-blur-xs"
+          onClick={() => {
+            if (!isDeleting) {
+              setDeleteTarget(null);
+              setDeleteError(null);
+            }
+          }}
+        >
+          <div
+            className="w-full max-w-md bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl p-6 space-y-4 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-full bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-900/60 flex items-center justify-center shrink-0">
+                  <AlertTriangle
+                    className="w-5 h-5 text-red-700 dark:text-red-400"
+                    aria-hidden="true"
+                  />
+                </div>
+                <div>
+                  <h2 className="font-display text-base font-semibold text-zinc-950 dark:text-white">
+                    {deleteTarget.kind === 'vehicle'
+                      ? 'Delete Vehicle?'
+                      : deleteTarget.kind === 'booking'
+                        ? 'Delete Lead?'
+                        : deleteTarget.kind === 'video'
+                          ? 'Delete Unloading Clip?'
+                          : 'Delete Team User?'}
+                  </h2>
+                  <p className="text-xs text-slate-600 dark:text-zinc-400 mt-1 leading-relaxed">
+                    Are you sure you want to permanently delete this record? This action cannot be
+                    undone.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={() => {
+                  setDeleteTarget(null);
+                  setDeleteError(null);
+                }}
+                aria-label="Close delete confirmation"
+                className="p-1.5 text-slate-400 dark:text-zinc-500 hover:text-zinc-950 dark:hover:text-white rounded-lg cursor-pointer disabled:opacity-50"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-3.5 rounded-lg bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800">
+              <div className="text-sm font-semibold text-zinc-950 dark:text-white truncate">
+                {deleteTarget.title}
+              </div>
+              <div className="text-xs font-mono text-slate-500 dark:text-zinc-400 truncate mt-0.5">
+                {deleteTarget.subtitle}
+              </div>
+            </div>
+
+            {deleteError && (
+              <p className="text-xs text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/60 rounded-lg px-3 py-2">
+                {deleteError}
+              </p>
+            )}
+
+            <div className="flex items-center justify-end gap-2.5 pt-1">
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={() => {
+                  setDeleteTarget(null);
+                  setDeleteError(null);
+                }}
+                className="px-4 py-2 text-xs font-medium text-slate-700 dark:text-zinc-300 bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 rounded-lg cursor-pointer disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={handleConfirmDelete}
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-medium text-white bg-red-700 hover:bg-red-800 dark:bg-red-600 dark:hover:bg-red-700 rounded-lg cursor-pointer disabled:opacity-60"
+              >
+                <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
+                <span>{isDeleting ? 'Deleting...' : 'Yes, Delete'}</span>
+              </button>
+            </div>
           </div>
         </div>
       )}
