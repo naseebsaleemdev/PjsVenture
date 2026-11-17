@@ -1,5 +1,17 @@
 import type { PortalPermissions, PortalRole, PortalUser } from '../types/autoTrade.ts';
 
+export function emailToPortalUserId(email: string): string {
+  return email
+    .trim()
+    .toLowerCase()
+    .replace(/@/g, '_at_')
+    .replace(/\./g, '_dot_')
+    .replace(/[^a-z0-9_-]/g, '_');
+}
+
+export const PRIMARY_OWNER_EMAIL = 'naseebsaleemvmi@gmail.com';
+export const PRIMARY_OWNER_DOC_ID = emailToPortalUserId(PRIMARY_OWNER_EMAIL);
+
 export const ROLE_DEFAULT_PERMISSIONS: Record<PortalRole, PortalPermissions> = {
   Admin: {
     inventoryRead: true,
@@ -37,7 +49,10 @@ export function createPermissionsForRole(role: PortalRole): PortalPermissions {
   return { ...ROLE_DEFAULT_PERMISSIONS[role] };
 }
 
-export function normalizePortalUser(raw: Partial<PortalUser>, fallbackRole: PortalRole = 'Viewer'): PortalUser {
+export function normalizePortalUser(
+  raw: Partial<PortalUser>,
+  fallbackRole: PortalRole = 'Viewer',
+): PortalUser {
   const role: PortalRole =
     raw.role === 'Admin' || raw.role === 'Editor' || raw.role === 'Viewer'
       ? raw.role
@@ -79,11 +94,11 @@ export function normalizePortalUser(raw: Partial<PortalUser>, fallbackRole: Port
   };
 
   if (raw.isPrimaryOwner) {
+    const ownerEmail = (raw.email || PRIMARY_OWNER_EMAIL).trim().toLowerCase();
     return {
-      id: raw.id || 'owner-admin',
+      id: emailToPortalUserId(ownerEmail),
       name: raw.name?.trim() || 'Primary Owner',
-      email: (raw.email || 'naseebsaleemvmi@gmail.com').trim().toLowerCase(),
-      password: raw.password || 'PJS#2026',
+      email: ownerEmail,
       role: 'Admin',
       active: true,
       permissions: { ...ROLE_DEFAULT_PERMISSIONS.Admin },
@@ -92,11 +107,11 @@ export function normalizePortalUser(raw: Partial<PortalUser>, fallbackRole: Port
     };
   }
 
+  const cleanEmail = (raw.email || '').trim().toLowerCase();
   return {
-    id: raw.id || `usr-${Date.now()}`,
+    id: cleanEmail ? emailToPortalUserId(cleanEmail) : raw.id || `usr-${Date.now()}`,
     name: raw.name?.trim() || 'Team Member',
-    email: (raw.email || '').trim().toLowerCase(),
-    password: raw.password || '',
+    email: cleanEmail,
     role,
     active: typeof raw.active === 'boolean' ? raw.active : true,
     permissions: mergedPerms,
@@ -107,10 +122,9 @@ export function normalizePortalUser(raw: Partial<PortalUser>, fallbackRole: Port
 
 export const INITIAL_PORTAL_USERS: PortalUser[] = [
   {
-    id: 'owner-admin',
+    id: PRIMARY_OWNER_DOC_ID,
     name: 'Owner Admin',
-    email: 'naseebsaleemvmi@gmail.com',
-    password: 'PJS#2026',
+    email: PRIMARY_OWNER_EMAIL,
     role: 'Admin',
     active: true,
     permissions: { ...ROLE_DEFAULT_PERMISSIONS.Admin },

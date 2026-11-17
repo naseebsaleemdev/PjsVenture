@@ -1,8 +1,6 @@
 import { useState } from 'react';
 import {
   CheckCircle2,
-  Eye,
-  EyeOff,
   Pencil,
   Plus,
   Shield,
@@ -132,8 +130,6 @@ export function PortalUsersPanel({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
   const [role, setRole] = useState<PortalRole>('Editor');
   const [active, setActive] = useState(true);
   const [permissions, setPermissions] = useState<PortalPermissions>(
@@ -150,8 +146,6 @@ export function PortalUsersPanel({
     setEditingId(null);
     setName('');
     setEmail('');
-    setPassword('');
-    setShowPassword(false);
     setRole('Editor');
     setActive(true);
     setPermissions(createPermissionsForRole('Editor'));
@@ -162,8 +156,6 @@ export function PortalUsersPanel({
     setEditingId(user.id);
     setName(user.name);
     setEmail(user.email);
-    setPassword('');
-    setShowPassword(false);
     setRole(user.role);
     setActive(user.active);
     setPermissions({ ...user.permissions });
@@ -206,15 +198,14 @@ export function PortalUsersPanel({
 
     const trimmedName = name.trim();
     const cleanEmail = email.trim().toLowerCase();
-    const trimmedPassword = password.trim();
 
     if (!trimmedName) {
-      setError('Please enter the user full name.');
+      setError('Please enter the team member full name.');
       return;
     }
 
     if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
-      setError('Please enter a valid login email address (e.g. staff@pjsventures.com).');
+      setError('Please enter a valid Google / team email address (e.g. staff@gmail.com).');
       return;
     }
 
@@ -227,41 +218,31 @@ export function PortalUsersPanel({
       return;
     }
 
-    if (!editingId && trimmedPassword.length < 6) {
-      setError('Please set a password of at least 6 characters for the new user.');
-      return;
-    }
-
-    if (editingId && trimmedPassword.length > 0 && trimmedPassword.length < 6) {
-      setError('Updated password must be at least 6 characters.');
-      return;
-    }
-
     setSaving(true);
     try {
       if (editingId) {
         await onUpdateUser(editingId, {
           name: trimmedName,
-          email: cleanEmail,
-          ...(trimmedPassword ? { password: trimmedPassword } : {}),
+          ...(isEditingPrimaryOwner ? {} : { email: cleanEmail }),
           role: isEditingPrimaryOwner ? 'Admin' : role,
           active: isEditingPrimaryOwner ? true : active,
           permissions: isEditingPrimaryOwner ? createPermissionsForRole('Admin') : permissions,
         });
         resetForm();
-        setNotice(`Updated access permissions for ${trimmedName}.`);
+        setNotice(`Updated cloud permissions for ${trimmedName}.`);
       } else {
         await onCreateUser({
           name: trimmedName,
           email: cleanEmail,
-          password: trimmedPassword,
           role,
           active,
           permissions,
           isPrimaryOwner: false,
         });
         resetForm();
-        setNotice(`Created account for ${trimmedName} (${role}). You can add another user below.`);
+        setNotice(
+          `Added ${trimmedName} (${cleanEmail}) as ${role}. They can now sign in at #portal using Google.`,
+        );
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save user.');
@@ -305,8 +286,8 @@ export function PortalUsersPanel({
         )}
 
         {notice && (
-          <p className="text-xs text-emerald-800 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 rounded-lg px-3.5 py-2.5 flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 shrink-0" aria-hidden="true" />
+          <p className="text-xs text-emerald-800 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 rounded-lg px-3.5 py-2.5 flex items-start gap-2">
+            <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" aria-hidden="true" />
             <span>{notice}</span>
           </p>
         )}
@@ -321,52 +302,29 @@ export function PortalUsersPanel({
               required
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Bilal Ahmed (Sales)"
+              placeholder="e.g. Shehbaaz Ali"
               className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-950 dark:text-zinc-100 placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus:outline-none focus:border-blue-900 dark:focus:border-blue-500"
             />
           </div>
 
           <div>
             <label className="block text-xs font-medium text-zinc-950 dark:text-zinc-200 mb-1">
-              Login Email *
+              Authorized Google / Team Email *
             </label>
             <input
               type="email"
               required
+              disabled={isEditingPrimaryOwner}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="staff@pjsventures.com"
-              className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-950 dark:text-zinc-100 placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus:outline-none focus:border-blue-900 dark:focus:border-blue-500"
+              placeholder="shehbaazali@gmail.com"
+              className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-950 dark:text-zinc-100 placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus:outline-none focus:border-blue-900 dark:focus:border-blue-500 disabled:opacity-60"
             />
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-zinc-950 dark:text-zinc-200 mb-1">
-              {editingId ? 'New Password (leave blank to keep current)' : 'Login Password (min 6 chars) *'}
-            </label>
-            <div className="relative">
-              <input
-                type={showPassword ? 'text' : 'password'}
-                required={!editingId}
-                minLength={editingId ? undefined : 6}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder={editingId ? 'Leave empty to keep existing password' : 'Set login password'}
-                className="w-full pl-3 pr-9 py-2 text-sm rounded-lg border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-950 dark:text-zinc-100 placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus:outline-none focus:border-blue-900 dark:focus:border-blue-500"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword((prev) => !prev)}
-                aria-label={showPassword ? 'Hide password' : 'Show password'}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-zinc-950 dark:hover:text-white cursor-pointer"
-              >
-                {showPassword ? (
-                  <EyeOff className="w-4 h-4" aria-hidden="true" />
-                ) : (
-                  <Eye className="w-4 h-4" aria-hidden="true" />
-                )}
-              </button>
-            </div>
+            <p className="text-[11px] text-slate-500 dark:text-zinc-400 mt-1">
+              {isEditingPrimaryOwner
+                ? 'Primary Owner email is permanently bound to this workspace.'
+                : 'User signs in at #portal via Google using this exact email address.'}
+            </p>
           </div>
         </div>
 
@@ -476,7 +434,7 @@ export function PortalUsersPanel({
           <Plus className="w-4 h-4" aria-hidden="true" />
           <span>
             {saving
-              ? 'Saving...'
+              ? 'Saving to Cloud...'
               : editingId
                 ? 'Save User & Permissions'
                 : 'Create User Account'}
@@ -492,7 +450,7 @@ export function PortalUsersPanel({
               Team Accounts &amp; Role Access
             </h2>
             <p className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
-              Each user signs in at #portal using their own email and password.
+              Synced via Cloud Firestore — each user signs in at #portal with their Google email.
             </p>
           </div>
           <span className="font-mono text-xs text-slate-500 dark:text-zinc-400 tabular-nums">

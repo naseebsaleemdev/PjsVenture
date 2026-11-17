@@ -147,7 +147,7 @@ export interface PortalUser {
   id: string;
   name: string;
   email: string;
-  password: string;
+  password?: string;
   role: PortalRole;
   active: boolean;
   permissions: PortalPermissions;

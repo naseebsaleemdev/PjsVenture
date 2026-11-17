@@ -1,3 +1,4 @@
+import { onAuthStateChanged } from 'firebase/auth';
 import { useCallback, useEffect, useState } from 'react';
 import { CifCalculatorSection, type LockedCifQuote } from './components/CifCalculatorSection';
 import { Footer } from './components/Footer';
@@ -16,6 +17,9 @@ import {
   INITIAL_VEHICLES,
   formatAutoPrice,
 } from './data/seedInventory.ts';
+import { auth } from './lib/firebase.ts';
+import { signOutPortal } from './lib/portalAuth.ts';
+import { INITIAL_PORTAL_USERS } from './lib/portalRoles.ts';
 import {
   createBookingRecord,
   createPortalUserRecord,
@@ -25,13 +29,15 @@ import {
   deletePortalUserRecord,
   deleteVehicleRecord,
   deleteVideoRecord,
-  loadInitialData,
+  loadPortalPrivateData,
+  resolveAuthorizedPortalUser,
+  seedInitialCatalogIfEmpty,
+  subscribePublicCatalog,
   updateBookingRecord,
   updatePortalUserRecord,
   updateVehicleRecord,
   updateVehicleStatusRecord,
 } from './lib/storeClient.ts';
-import { INITIAL_PORTAL_USERS } from './lib/portalRoles.ts';
 import type {
   AutoCurrency,
   BookingRequest,
@@ -83,6 +89,10 @@ export default function App() {
   const [videos, setVideos] = useState<UnloadingVideo[]>(INITIAL_UNLOADING_VIDEOS);
   const [portalUsers, setPortalUsers] = useState<PortalUser[]>(INITIAL_PORTAL_USERS);
   const [loading, setLoading] = useState<boolean>(true);
+  const [activePortalUser, setActivePortalUser] = useState<PortalUser | null>(null);
+  const [authLoading, setAuthLoading] = useState<boolean>(true);
+  const [authError, setAuthError] = useState<string | null>(null);
+
   const [currency, setCurrency] = useState<AutoCurrency>('USD');
   const [shortlistIds, setShortlistIds] = useState<string[]>([]);
   const [selectedVehicleForBooking, setSelectedVehicleForBooking] =
@@ -122,24 +132,69 @@ export default function App() {
     };
   }, []);
 
+  // Subscribe to public catalog (vehicles + unloading videos) in Cloud Firestore
+  useEffect(() => {
+    const unsubscribe = subscribePublicCatalog(
+      (nextVehicles) => setVehicles(nextVehicles),
+      (nextVideos) => setVideos(nextVideos),
+      () => setLoading(false),
+    );
+    return () => unsubscribe();
+  }, []);
+
+  // Listen to Firebase Auth state & resolve Cloud RBAC user profile
   useEffect(() => {
     let cancelled = false;
-    async function hydrate() {
-      try {
-        const data = await loadInitialData();
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (!firebaseUser) {
         if (!cancelled) {
-          setVehicles(data.vehicles);
-          setBookings(data.bookings);
-          setVideos(data.videos);
-          setPortalUsers(data.users);
+          setActivePortalUser(null);
+          setBookings([]);
+          setPortalUsers(INITIAL_PORTAL_USERS);
+          setAuthLoading(false);
+        }
+        return;
+      }
+
+      setAuthLoading(true);
+      try {
+        const resolution = await resolveAuthorizedPortalUser(firebaseUser);
+        if (cancelled) return;
+
+        if (!resolution.ok) {
+          setActivePortalUser(null);
+          setAuthError(resolution.error);
+          await signOutPortal();
+          return;
+        }
+
+        setAuthError(null);
+        setActivePortalUser(resolution.user);
+        await seedInitialCatalogIfEmpty(resolution.user);
+        const privateData = await loadPortalPrivateData(resolution.user);
+        if (!cancelled) {
+          setBookings(privateData.bookings);
+          setPortalUsers(privateData.users);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setActivePortalUser(null);
+          setAuthError(
+            err instanceof Error
+              ? err.message
+              : 'Could not verify portal permissions in Firestore.',
+          );
         }
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setAuthLoading(false);
+        }
       }
-    }
-    hydrate();
+    });
+
     return () => {
       cancelled = true;
+      unsubscribe();
     };
   }, []);
 
@@ -220,24 +275,28 @@ export default function App() {
     crmNotes?: string;
   }): Promise<BookingRequest> => {
     const created = await createBookingRecord(payload);
-    setBookings((prev) => [created, ...prev]);
+    if (activePortalUser?.permissions.bookingsRead) {
+      setBookings((prev) => [created, ...prev]);
+    }
     return created;
   };
 
   const handleCreateVehicle = async (vehicleInput: Omit<ExportVehicle, 'id' | 'createdAt'>) => {
     const created = await createVehicleRecord(vehicleInput);
-    setVehicles((prev) => [created, ...prev]);
+    setVehicles((prev) => (prev.some((v) => v.id === created.id) ? prev : [created, ...prev]));
   };
 
   const handleUpdateVehicle = async (id: string, updates: Partial<ExportVehicle>) => {
-    const updated = await updateVehicleRecord(id, updates);
+    const current = vehicles.find((v) => v.id === id);
+    const updated = await updateVehicleRecord(id, updates, current);
     if (updated) {
       setVehicles((prev) => prev.map((v) => (v.id === id ? updated : v)));
     }
   };
 
   const handleUpdateVehicleStatus = async (id: string, status: VehicleStatus) => {
-    const updated = await updateVehicleStatusRecord(id, status);
+    const current = vehicles.find((v) => v.id === id);
+    const updated = await updateVehicleStatusRecord(id, status, current);
     if (updated) {
       setVehicles((prev) => prev.map((v) => (v.id === id ? updated : v)));
     }
@@ -253,12 +312,17 @@ export default function App() {
     id: string,
     updates: { status?: BookingRequest['status']; crmNotes?: string },
   ) => {
-    const res = await updateBookingRecord(id, updates);
+    const current = bookings.find((b) => b.id === id);
+    const canSyncVeh = Boolean(activePortalUser?.permissions.inventoryWrite);
+    const res = await updateBookingRecord(id, updates, current, canSyncVeh);
     if (res.booking) {
       setBookings((prev) => prev.map((b) => (b.id === id ? res.booking! : b)));
     }
-    if (Array.isArray(res.vehicles)) {
-      setVehicles(res.vehicles);
+    if (res.syncedVehicleStatus) {
+      const { id: vehId, status: vehStatus } = res.syncedVehicleStatus;
+      setVehicles((prev) =>
+        prev.map((v) => (v.id === vehId ? { ...v, status: vehStatus } : v)),
+      );
     }
   };
 
@@ -269,7 +333,7 @@ export default function App() {
 
   const handleCreateVideo = async (videoInput: Omit<UnloadingVideo, 'id' | 'createdAt'>) => {
     const created = await createVideoRecord(videoInput);
-    setVideos((prev) => [created, ...prev]);
+    setVideos((prev) => (prev.some((v) => v.id === created.id) ? prev : [created, ...prev]));
   };
 
   const handleDeleteVideo = async (id: string) => {
@@ -283,9 +347,18 @@ export default function App() {
   };
 
   const handleUpdateUser = async (id: string, updates: Partial<PortalUser>) => {
-    const updated = await updatePortalUserRecord(id, updates);
-    if (updated) {
-      setPortalUsers((prev) => prev.map((u) => (u.id === id ? updated : u)));
+    const current = portalUsers.find((u) => u.id === id);
+    const res = await updatePortalUserRecord(id, updates, current);
+    if (res.user) {
+      setPortalUsers((prev) => {
+        if (res.replacedId) {
+          return prev.map((u) => (u.id === res.replacedId ? res.user! : u));
+        }
+        return prev.map((u) => (u.id === id ? res.user! : u));
+      });
+      if (activePortalUser?.id === id) {
+        setActivePortalUser(res.user);
+      }
     }
   };
 
@@ -294,9 +367,20 @@ export default function App() {
     setPortalUsers((prev) => prev.filter((u) => u.id !== id));
   };
 
+  const handleSignOut = async () => {
+    await signOutPortal();
+    setActivePortalUser(null);
+    setAuthError(null);
+  };
+
   if (route === '/portal') {
     return (
       <SellerPortal
+        activeUser={activePortalUser}
+        authLoading={authLoading}
+        authError={authError}
+        onClearAuthError={() => setAuthError(null)}
+        onSignOut={handleSignOut}
         vehicles={vehicles}
         bookings={bookings}
         videos={videos}

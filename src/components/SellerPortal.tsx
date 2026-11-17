@@ -7,7 +7,6 @@ import {
   ChevronRight,
   Download,
   Film,
-  KeyRound,
   LogOut,
   Mail,
   MessageSquare,
@@ -32,13 +31,6 @@ import {
   getPortTrackingStage,
   getVehicleImages,
 } from '../data/seedInventory.ts';
-import {
-  clearPortalSession,
-  isValidPortalPassword,
-  readPortalSession,
-  savePortalPassword,
-  writePortalSession,
-} from '../lib/portalAuth.ts';
 import { readPortalDarkMode, writePortalDarkMode } from '../lib/portalTheme.ts';
 import type {
   BookingRequest,
@@ -65,6 +57,11 @@ type DeleteTarget =
   | null;
 
 interface SellerPortalProps {
+  activeUser: PortalUser | null;
+  authLoading: boolean;
+  authError: string | null;
+  onClearAuthError: () => void;
+  onSignOut: () => Promise<void>;
   vehicles: ExportVehicle[];
   bookings: BookingRequest[];
   videos: UnloadingVideo[];
@@ -111,7 +108,7 @@ async function compressImageFile(file: File): Promise<string> {
       const img = new Image();
       img.onload = () => {
         const canvas = document.createElement('canvas');
-        const maxWidth = 960;
+        const maxWidth = 800;
         const scale = Math.min(1, maxWidth / img.width);
         canvas.width = Math.round(img.width * scale);
         canvas.height = Math.round(img.height * scale);
@@ -121,7 +118,7 @@ async function compressImageFile(file: File): Promise<string> {
           return;
         }
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        resolve(canvas.toDataURL('image/jpeg', 0.82));
+        resolve(canvas.toDataURL('image/jpeg', 0.72));
       };
       img.onerror = () => reject(new Error('Invalid image file'));
       img.src = reader.result as string;
@@ -132,6 +129,11 @@ async function compressImageFile(file: File): Promise<string> {
 }
 
 export function SellerPortal({
+  activeUser,
+  authLoading,
+  authError,
+  onClearAuthError,
+  onSignOut,
   vehicles,
   bookings,
   videos,
@@ -150,20 +152,6 @@ export function SellerPortal({
   onDeleteUser,
   onExitPortal,
 }: SellerPortalProps) {
-  const [sessionIdentity, setSessionIdentity] = useState<{ id: string; email: string } | null>(
-    () => {
-      const existing = readPortalSession(users);
-      return existing ? { id: existing.id, email: existing.email } : null;
-    },
-  );
-  const currentUser: PortalUser | null = sessionIdentity
-    ? users.find((u) => u.id === sessionIdentity.id) ||
-      users.find(
-        (u) => u.email.trim().toLowerCase() === sessionIdentity.email.trim().toLowerCase(),
-      ) ||
-      readPortalSession(users)
-    : null;
-  const activeUser = currentUser && (currentUser.active || currentUser.isPrimaryOwner) ? currentUser : null;
 
   const [activeTab, setActiveTab] = useState<PortalTab>('inventory');
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => readPortalDarkMode());
@@ -242,14 +230,6 @@ export function SellerPortal({
   const [etaDate, setEtaDate] = useState('2026-11-28');
   const [vesselName, setVesselName] = useState('Next Weekly RoRo Sailing');
   const [arrivalStatus, setArrivalStatus] = useState('Ready to Book · Yokohama Yard');
-
-  // Change CRM Password Modal State
-  const [pwModalOpen, setPwModalOpen] = useState(false);
-  const [pwCurrent, setPwCurrent] = useState('');
-  const [pwNext, setPwNext] = useState('');
-  const [pwConfirm, setPwConfirm] = useState('');
-  const [pwError, setPwError] = useState<string | null>(null);
-  const [pwSaved, setPwSaved] = useState(false);
   const [fobUsd, setFobUsd] = useState(16500);
   const [cbm, setCbm] = useState(11.6);
   const [fullCifUsd, setFullCifUsd] = useState(18100);
@@ -401,23 +381,20 @@ export function SellerPortal({
     URL.revokeObjectURL(url);
   };
 
-  const handleAuthenticated = (user: PortalUser) => {
-    writePortalSession(user);
-    setSessionIdentity({ id: user.id, email: user.email });
-  };
-
-  const handleSignOut = () => {
-    clearPortalSession();
-    setSessionIdentity(null);
-  };
-
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
     if (files.length === 0) return;
     try {
-      const compressedList = await Promise.all(files.map((file) => compressImageFile(file)));
+      const remainingSlots = Math.max(0, 8 - galleryImages.length);
+      if (remainingSlots === 0) {
+        setFormError('Maximum 8 photos per vehicle listing.');
+        return;
+      }
+      const compressedList = await Promise.all(
+        files.slice(0, remainingSlots).map((file) => compressImageFile(file)),
+      );
       setGalleryImages((prev) => {
-        const next = [...prev, ...compressedList];
+        const next = [...prev, ...compressedList].slice(0, 8);
         setPreviewIndex(prev.length === 0 ? 0 : next.length - 1);
         return next;
       });
@@ -432,9 +409,13 @@ export function SellerPortal({
   const handleAddImageUrl = () => {
     const trimmed = customImageUrl.trim();
     if (!trimmed) return;
+    if (galleryImages.length >= 8) {
+      setFormError('Maximum 8 photos per vehicle listing.');
+      return;
+    }
     setGalleryImages((prev) => {
       if (prev.includes(trimmed)) return prev;
-      const next = [...prev, trimmed];
+      const next = [...prev, trimmed].slice(0, 8);
       setPreviewIndex(prev.length === 0 ? 0 : next.length - 1);
       return next;
     });
@@ -646,15 +627,21 @@ export function SellerPortal({
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
-    if (file.size > 8 * 1024 * 1024) {
+    if (file.size > 500 * 1024) {
       setVideoFormError(
-        'Uploaded video files must be under 8 MB. For larger clips, paste an MP4 or YouTube URL below.',
+        'Direct video uploads must be under 500 KB for cloud storage. For larger clips, paste an MP4 or YouTube URL below.',
       );
       return;
     }
     const reader = new FileReader();
     reader.onload = () => {
       if (typeof reader.result === 'string') {
+        if (reader.result.length > 740000) {
+          setVideoFormError(
+            'Encoded clip exceeds cloud document limit. Please paste an MP4 or YouTube URL instead.',
+          );
+          return;
+        }
         setVideoUrl(reader.result);
         setVideoFormError(null);
       }
@@ -697,13 +684,11 @@ export function SellerPortal({
   if (!activeUser) {
     return (
       <PortalLoginGate
-        users={users}
         isDarkMode={isDarkMode}
         onToggleDarkMode={handleToggleDarkMode}
-        onAuthenticated={handleAuthenticated}
-        onSyncOwnerPassword={async (userId, nextPw) => {
-          await onUpdateUser(userId, { password: nextPw });
-        }}
+        authLoading={authLoading}
+        authError={authError}
+        onClearAuthError={onClearAuthError}
         onExitPortal={onExitPortal}
       />
     );
@@ -869,23 +854,7 @@ export function SellerPortal({
 
           <button
             type="button"
-            onClick={() => {
-              setPwError(null);
-              setPwSaved(false);
-              setPwCurrent('');
-              setPwNext('');
-              setPwConfirm('');
-              setPwModalOpen(true);
-            }}
-            className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 text-xs font-medium text-slate-700 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-800 rounded-lg transition-colors cursor-pointer"
-          >
-            <KeyRound className="w-3.5 h-3.5" aria-hidden="true" />
-            <span>Change Password</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={handleSignOut}
+            onClick={() => void onSignOut()}
             className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 text-xs font-medium text-slate-600 dark:text-zinc-400 hover:text-red-700 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-lg transition-colors cursor-pointer"
           >
             <LogOut className="w-3.5 h-3.5" aria-hidden="true" />
@@ -2573,139 +2542,6 @@ export function SellerPortal({
           )}
         </div>
       </div>
-
-      {/* Change CRM / Portal Password Modal */}
-      {pwModalOpen && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label="Change Seller Portal Password"
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/60 backdrop-blur-xs"
-          onClick={() => setPwModalOpen(false)}
-        >
-          <div
-            className="w-full max-w-md bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl p-6 space-y-4 shadow-lg"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between border-b border-slate-100 dark:border-zinc-800 pb-3">
-              <div className="flex items-center gap-2.5">
-                <KeyRound className="w-4 h-4 text-blue-900 dark:text-blue-400" aria-hidden="true" />
-                <h2 className="font-display text-base font-semibold text-zinc-950 dark:text-white">
-                  Change Your Password
-                </h2>
-              </div>
-              <button
-                type="button"
-                onClick={() => setPwModalOpen(false)}
-                aria-label="Close password modal"
-                className="p-1.5 text-slate-400 dark:text-zinc-500 hover:text-zinc-950 dark:hover:text-white rounded-lg cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {pwError && (
-              <p className="text-xs text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/60 rounded-lg px-3 py-2">
-                {pwError}
-              </p>
-            )}
-            {pwSaved && (
-              <p className="text-xs text-emerald-800 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900/60 rounded-lg px-3 py-2">
-                Password updated successfully. Use your new password next time you sign in.
-              </p>
-            )}
-
-            <form
-              onSubmit={async (e) => {
-                e.preventDefault();
-                const currentOk = activeUser.isPrimaryOwner
-                  ? isValidPortalPassword(pwCurrent) || pwCurrent === activeUser.password
-                  : pwCurrent === activeUser.password;
-                if (!currentOk) {
-                  setPwError('Current password is incorrect.');
-                  return;
-                }
-                if (pwNext.trim().length < 6) {
-                  setPwError('New password must be at least 6 characters.');
-                  return;
-                }
-                if (pwNext !== pwConfirm) {
-                  setPwError('New password and confirmation do not match.');
-                  return;
-                }
-                try {
-                  await onUpdateUser(activeUser.id, { password: pwNext });
-                  if (activeUser.isPrimaryOwner) {
-                    savePortalPassword(pwNext);
-                  }
-                  setPwError(null);
-                  setPwSaved(true);
-                  setPwCurrent('');
-                  setPwNext('');
-                  setPwConfirm('');
-                } catch (err) {
-                  setPwError(err instanceof Error ? err.message : 'Could not update password.');
-                }
-              }}
-              className="space-y-3"
-            >
-              <div>
-                <label className="block text-xs font-medium text-zinc-950 dark:text-zinc-200 mb-1">
-                  Current Password
-                </label>
-                <input
-                  type="password"
-                  required
-                  value={pwCurrent}
-                  onChange={(e) => setPwCurrent(e.target.value)}
-                  className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-950 dark:text-zinc-100"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-zinc-950 dark:text-zinc-200 mb-1">
-                  New Password (min 6 chars)
-                </label>
-                <input
-                  type="password"
-                  required
-                  minLength={6}
-                  value={pwNext}
-                  onChange={(e) => setPwNext(e.target.value)}
-                  className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-950 dark:text-zinc-100"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-zinc-950 dark:text-zinc-200 mb-1">
-                  Confirm New Password
-                </label>
-                <input
-                  type="password"
-                  required
-                  minLength={6}
-                  value={pwConfirm}
-                  onChange={(e) => setPwConfirm(e.target.value)}
-                  className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-950 dark:text-zinc-100"
-                />
-              </div>
-              <div className="flex justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setPwModalOpen(false)}
-                  className="px-4 py-2 text-xs font-medium text-slate-600 dark:text-zinc-300 bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 rounded-lg cursor-pointer"
-                >
-                  Close
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 text-xs font-medium text-white bg-blue-900 hover:bg-blue-950 dark:bg-blue-700 dark:hover:bg-blue-600 rounded-lg cursor-pointer"
-                >
-                  Update Password
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
       {/* Unified Delete Confirmation Modal */}
       {deleteTarget && (
