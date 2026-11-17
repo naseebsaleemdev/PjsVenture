@@ -1017,15 +1017,20 @@ export function SellerPortal({
               {filteredInventory.length === 0 ? (
                 <div className="p-10 text-center space-y-3">
                   <p className="text-sm text-slate-600 dark:text-zinc-400">
-                    No vehicles match your current filter.
+                    {vehicles.length === 0
+                      ? 'No vehicles in inventory yet.'
+                      : 'No vehicles match your current filter.'}
                   </p>
                   {perms.inventoryWrite && (
                     <button
                       type="button"
-                      onClick={() => setActiveTab('add-vehicle')}
+                      onClick={() => {
+                        resetFormForNew();
+                        setActiveTab('add-vehicle');
+                      }}
                       className="px-4 py-2 text-sm font-medium text-white bg-blue-900 dark:bg-blue-700 rounded-lg cursor-pointer"
                     >
-                      Add Your First Vehicle
+                      {vehicles.length === 0 ? 'Add Your First Vehicle' : 'Add Vehicle'}
                     </button>
                   )}
                 </div>

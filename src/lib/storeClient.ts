@@ -222,14 +222,10 @@ export function subscribePublicCatalog(
     collection(db, 'vehicles'),
     (snapshot) => {
       vehiclesReady = true;
-      if (snapshot.empty) {
-        onVehicles(INITIAL_VEHICLES);
-      } else {
-        const list = snapshot.docs
-          .map((d) => docToVehicle(d.data() as Record<string, unknown>, d.id))
-          .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-        onVehicles(list);
-      }
+      const list = snapshot.docs
+        .map((d) => docToVehicle(d.data() as Record<string, unknown>, d.id))
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      onVehicles(list);
       markReady();
     },
     (error) => {
@@ -241,14 +237,10 @@ export function subscribePublicCatalog(
     collection(db, 'videos'),
     (snapshot) => {
       videosReady = true;
-      if (snapshot.empty) {
-        onVideos(INITIAL_UNLOADING_VIDEOS);
-      } else {
-        const list = snapshot.docs
-          .map((d) => docToVideo(d.data() as Record<string, unknown>, d.id))
-          .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-        onVideos(list);
-      }
+      const list = snapshot.docs
+        .map((d) => docToVideo(d.data() as Record<string, unknown>, d.id))
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      onVideos(list);
       markReady();
     },
     (error) => {
@@ -263,7 +255,7 @@ export function subscribePublicCatalog(
 }
 
 export type PortalUserResolution =
-  | { ok: true; user: PortalUser }
+  | { ok: true; user: PortalUser; isFirstBootstrap?: boolean }
   | { ok: false; error: string };
 
 export async function resolveAuthorizedPortalUser(
@@ -361,6 +353,7 @@ export async function resolveAuthorizedPortalUser(
       await setDoc(userRef, ownerPayload);
       return {
         ok: true,
+        isFirstBootstrap: true,
         user: normalizePortalUser(
           {
             ...ownerPayload,
@@ -380,8 +373,11 @@ export async function resolveAuthorizedPortalUser(
   }
 }
 
-export async function seedInitialCatalogIfEmpty(user: PortalUser): Promise<void> {
-  if (!user.isPrimaryOwner) {
+export async function seedInitialCatalogIfEmpty(
+  user: PortalUser,
+  isFirstBootstrap = false,
+): Promise<void> {
+  if (!user.isPrimaryOwner || !isFirstBootstrap) {
     return;
   }
 

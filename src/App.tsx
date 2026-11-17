@@ -12,11 +12,7 @@ import { PortDealsPage } from './components/PortDealsPage';
 import { PortsPage } from './components/PortsPage';
 import { SellerPortal } from './components/SellerPortal';
 import { VehicleDetailPage } from './components/VehicleDetailPage';
-import {
-  INITIAL_UNLOADING_VIDEOS,
-  INITIAL_VEHICLES,
-  formatAutoPrice,
-} from './data/seedInventory.ts';
+import { formatAutoPrice } from './data/seedInventory.ts';
 import { auth } from './lib/firebase.ts';
 import { signOutPortal } from './lib/portalAuth.ts';
 import { INITIAL_PORTAL_USERS } from './lib/portalRoles.ts';
@@ -84,9 +80,9 @@ function resolveInitialRoute(): AppRoute {
 
 export default function App() {
   const [route, setRoute] = useState<AppRoute>(resolveInitialRoute);
-  const [vehicles, setVehicles] = useState<ExportVehicle[]>(INITIAL_VEHICLES);
+  const [vehicles, setVehicles] = useState<ExportVehicle[]>([]);
   const [bookings, setBookings] = useState<BookingRequest[]>([]);
-  const [videos, setVideos] = useState<UnloadingVideo[]>(INITIAL_UNLOADING_VIDEOS);
+  const [videos, setVideos] = useState<UnloadingVideo[]>([]);
   const [portalUsers, setPortalUsers] = useState<PortalUser[]>(INITIAL_PORTAL_USERS);
   const [loading, setLoading] = useState<boolean>(true);
   const [activePortalUser, setActivePortalUser] = useState<PortalUser | null>(null);
@@ -170,7 +166,7 @@ export default function App() {
 
         setAuthError(null);
         setActivePortalUser(resolution.user);
-        await seedInitialCatalogIfEmpty(resolution.user);
+        await seedInitialCatalogIfEmpty(resolution.user, resolution.isFirstBootstrap);
         const privateData = await loadPortalPrivateData(resolution.user);
         if (!cancelled) {
           setBookings(privateData.bookings);
