@@ -3,25 +3,27 @@ import { ArrowRight, CheckCircle2, Ship } from 'lucide-react';
 import { DESTINATION_PORTS, PORT_REGIONS } from '../data/seedInventory.ts';
 import type {
   AutoCurrency,
+  BlogPost,
   BookingRequest,
   ExportVehicle,
-  UnloadingVideo,
 } from '../types/autoTrade.ts';
 import { AuctionProcessSection } from './AuctionProcessSection';
-import { ContainerVideosSection } from './ContainerVideosSection';
+import { ExportShowcaseSection } from './ExportShowcaseSection';
 import { HeroSection } from './HeroSection';
 import type { AppRoute } from './Navbar';
+import { ResilientImage } from './ResilientImage';
 import { VehicleCard } from './VehicleCard';
 
 interface HomePageProps {
   vehicles: ExportVehicle[];
-  videos: UnloadingVideo[];
+  blogs?: BlogPost[];
   currency: AutoCurrency;
   shortlistIds: string[];
   onToggleShortlist: (vehicleId: string) => void;
   onInspectVehicle: (vehicle: ExportVehicle) => void;
   onBookOrClaimVehicle: (vehicle: ExportVehicle) => void;
   onNavigate: (route: AppRoute) => void;
+  onOpenBlogPost?: (slug: string) => void;
   onSelectPortForInventory: (portId: string) => void;
   onSubmitQuickLead: (payload: {
     vehicleId: string | null;
@@ -40,15 +42,47 @@ interface HomePageProps {
   }) => Promise<BookingRequest>;
 }
 
+const VEHICLE_CLASS_SHOWCASE = [
+  {
+    title: '4x4 SUVs & Cruisers',
+    subtitle: 'Land Cruiser Prado, RAV4, Harrier & X-Trail',
+    detail: 'Auction Grade 4.0–4.5 inspected units built for island and rugged terrain.',
+    image: '/src/assets/images/auto_suv_prado_1794825333513.jpg',
+    alt: 'Pearl-white Japanese 4x4 SUV staged in export lot',
+  },
+  {
+    title: 'Fuel-Efficient Hybrids',
+    subtitle: 'Toyota Aqua, Prius, Corolla & Fit e:HEV',
+    detail: 'Low-emission daily commuters with verified hybrid battery health.',
+    image: '/src/assets/images/auto_hybrid_aqua_1794825334004.jpg',
+    alt: 'Compact metallic silver Japanese hybrid hatchback',
+  },
+  {
+    title: '4WD Work Pickups',
+    subtitle: 'Toyota Hilux Revo, D-Max & Triton 4x4',
+    detail: 'Turbo-diesel commercial and crew-cab workhorses cleared for port dispatch.',
+    image: '/src/assets/images/auto_pickup_hilux_1794825334855.jpg',
+    alt: 'Japanese double-cab 4WD diesel pickup truck',
+  },
+  {
+    title: 'Executive Sedans & Vans',
+    subtitle: 'Toyota Crown, Mark X & HiAce Commuter',
+    detail: 'Clean Grade 4.5 executive sedans and multi-passenger fleet vans.',
+    image: '/src/assets/images/auto_sedan_crown_1794825335274.jpg',
+    alt: 'Japanese executive sedan in Yokohama inspection lot',
+  },
+];
+
 export function HomePage({
   vehicles,
-  videos,
+  blogs = [],
   currency,
   shortlistIds,
   onToggleShortlist,
   onInspectVehicle,
   onBookOrClaimVehicle,
   onNavigate,
+  onOpenBlogPost,
   onSelectPortForInventory,
   onSubmitQuickLead,
 }: HomePageProps) {
@@ -156,33 +190,103 @@ export function HomePage({
         </div>
       </section>
 
-      {/* Two Clear Buying Options */}
+      {/* Popular Vehicle Classes Photography Strip */}
       <section className="py-16 bg-white border-b border-slate-200">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-10">
+            <div className="max-w-xl">
+              <p className="text-sm font-medium text-blue-900 mb-2">Browse by Vehicle Class</p>
+              <h2 className="font-display text-2xl sm:text-3xl font-semibold tracking-tight text-zinc-950">
+                Auction-graded Japanese models ready for global export.
+              </h2>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => onNavigate('/inventory')}
+              className="inline-flex items-center gap-2 text-sm font-medium text-blue-900 hover:text-blue-950 underline-offset-4 hover:underline cursor-pointer whitespace-nowrap shrink-0"
+            >
+              <span>Filter Full Catalog</span>
+              <ArrowRight className="w-4 h-4" aria-hidden="true" />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {VEHICLE_CLASS_SHOWCASE.map((category) => (
+              <button
+                key={category.title}
+                type="button"
+                onClick={() => onNavigate('/inventory')}
+                className="group text-left bg-slate-50 border border-slate-200 hover:border-blue-900 rounded-xl overflow-hidden transition-colors flex flex-col cursor-pointer"
+              >
+                <div className="aspect-[4/3] w-full bg-slate-100 overflow-hidden">
+                  <ResilientImage
+                    src={category.image}
+                    alt={category.alt}
+                    fallbackTitle={category.title}
+                    className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-300"
+                  />
+                </div>
+                <div className="p-4 bg-white border-t border-slate-200 flex-1 flex flex-col justify-between">
+                  <div>
+                    <div className="text-[11px] font-medium text-blue-900 uppercase tracking-wide">
+                      {category.subtitle}
+                    </div>
+                    <h3 className="font-display text-base font-semibold text-zinc-950 mt-1">
+                      {category.title}
+                    </h3>
+                    <p className="mt-1.5 text-xs text-slate-600 leading-relaxed">
+                      {category.detail}
+                    </p>
+                  </div>
+                  <div className="mt-3 pt-3 border-t border-slate-100 inline-flex items-center gap-1.5 text-xs font-medium text-blue-900">
+                    <span>Explore Units</span>
+                    <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Two Clear Buying Options with Photography */}
+      <section className="py-16 bg-slate-50 border-b border-slate-200">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-2xl mb-10">
             <p className="text-sm font-medium text-blue-900 mb-2">How PJS Ventures Works</p>
             <h2 className="font-display text-2xl sm:text-3xl font-semibold tracking-tight text-zinc-950">
-              Two straightforward ways to buy Japanese vehicles for the Caribbean.
+              Two straightforward ways to buy verified Japanese vehicles worldwide.
             </h2>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="border border-slate-200 rounded-xl p-6 sm:p-8 bg-slate-50/70 flex flex-col justify-between">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-8">
+            <div className="border border-slate-200 rounded-xl overflow-hidden bg-white flex flex-col justify-between">
               <div>
-                <div className="flex items-center gap-2 text-xs font-medium text-zinc-950 mb-3">
-                  <CheckCircle2 className="w-4 h-4 text-blue-900" aria-hidden="true" />
-                  <span>Primary Service · Most Inventory</span>
+                <div className="aspect-[16/10] w-full bg-slate-100 overflow-hidden border-b border-slate-200">
+                  <ResilientImage
+                    src="/src/assets/images/yokohama_inspection_bay_1794999716476.jpg"
+                    alt="Japanese export inspector reviewing vehicle engine bay inside Yokohama yard"
+                    fallbackTitle="Book Direct Japan Imports"
+                    className="w-full h-full object-cover"
+                  />
                 </div>
-                <h3 className="font-display text-xl font-semibold text-zinc-950">
-                  Book Direct Japan Imports
-                </h3>
-                <p className="mt-2.5 text-sm text-slate-600 leading-relaxed">
-                  Choose any verified SUV, hybrid, sedan, or commercial unit in our Japanese yard
-                  inventory. Reserve online and we handle JEVIC inspection, export deregistration,
-                  and weekly RoRo or container shipping directly to your Caribbean port.
-                </p>
+                <div className="p-6 sm:p-8">
+                  <div className="flex items-center gap-2 text-xs font-medium text-zinc-950 mb-3">
+                    <CheckCircle2 className="w-4 h-4 text-blue-900" aria-hidden="true" />
+                    <span>Primary Service · Most Inventory</span>
+                  </div>
+                  <h3 className="font-display text-xl font-semibold text-zinc-950">
+                    Book Direct Japan Imports
+                  </h3>
+                  <p className="mt-2.5 text-sm text-slate-600 leading-relaxed">
+                    Choose any verified SUV, hybrid, sedan, or commercial unit in our Japanese yard
+                    inventory. Reserve online and we handle JEVIC inspection, export deregistration,
+                    and weekly RoRo or container shipping directly to your destination port.
+                  </p>
+                </div>
               </div>
-              <div className="mt-6 pt-4 border-t border-slate-200">
+              <div className="px-6 sm:px-8 py-4 border-t border-slate-200 bg-slate-50/70">
                 <button
                   type="button"
                   onClick={() => onNavigate('/inventory')}
@@ -194,22 +298,32 @@ export function HomePage({
               </div>
             </div>
 
-            <div className="border border-blue-200 rounded-xl p-6 sm:p-8 bg-blue-50/40 flex flex-col justify-between">
+            <div className="border border-blue-200 rounded-xl overflow-hidden bg-white flex flex-col justify-between">
               <div>
-                <div className="flex items-center gap-2 text-xs font-medium text-blue-900 mb-3">
-                  <Ship className="w-4 h-4 text-blue-900" aria-hidden="true" />
-                  <span>Select Units · Save Prior Buyer Deposit</span>
+                <div className="aspect-[16/10] w-full bg-slate-100 overflow-hidden border-b border-blue-200/80">
+                  <ResilientImage
+                    src="/src/assets/images/port_arrival_handover_1794999712812.jpg"
+                    alt="Newly arrived Japanese SUV and 4WD pickup staged at coastal destination port"
+                    fallbackTitle="Port Balance-Release Deals"
+                    className="w-full h-full object-cover"
+                  />
                 </div>
-                <h3 className="font-display text-xl font-semibold text-zinc-950">
-                  Port Balance-Release Deals
-                </h3>
-                <p className="mt-2.5 text-sm text-slate-600 leading-relaxed">
-                  Occasionally an already-shipped vehicle has 40%–50% paid by an original buyer who
-                  did not complete final settlement. Buyers at that destination port can step in,
-                  pay only the remaining balance, and clear the vehicle immediately.
-                </p>
+                <div className="p-6 sm:p-8">
+                  <div className="flex items-center gap-2 text-xs font-medium text-blue-900 mb-3">
+                    <Ship className="w-4 h-4 text-blue-900" aria-hidden="true" />
+                    <span>Select Units · Save Prior Buyer Deposit</span>
+                  </div>
+                  <h3 className="font-display text-xl font-semibold text-zinc-950">
+                    Port Balance-Release Deals
+                  </h3>
+                  <p className="mt-2.5 text-sm text-slate-600 leading-relaxed">
+                    Occasionally an already-shipped vehicle has 40%–50% paid by an original buyer who
+                    did not complete final settlement. Buyers at that destination port can step in,
+                    pay only the remaining balance, and clear the vehicle immediately.
+                  </p>
+                </div>
               </div>
-              <div className="mt-6 pt-4 border-t border-blue-200/70">
+              <div className="px-6 sm:px-8 py-4 border-t border-blue-200/70 bg-blue-50/40">
                 <button
                   type="button"
                   onClick={() => onNavigate('/port-deals')}
@@ -225,7 +339,7 @@ export function HomePage({
       </section>
 
       {/* Worldwide Export Corridors Preview */}
-      <section className="py-16 sm:py-20 bg-slate-50 border-b border-slate-200">
+      <section className="py-16 sm:py-20 bg-white border-b border-slate-200">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-10">
             <div className="max-w-xl">
@@ -266,7 +380,7 @@ export function HomePage({
                   onSelectPortForInventory(port.id);
                   onNavigate('/inventory');
                 }}
-                className="text-left p-5 rounded-xl border border-slate-200 bg-white hover:border-blue-900 transition-colors cursor-pointer flex flex-col justify-between"
+                className="text-left p-5 rounded-xl border border-slate-200 bg-slate-50/70 hover:border-blue-900 transition-colors cursor-pointer flex flex-col justify-between"
               >
                 <div>
                   <div className="text-xs font-medium text-blue-900">
@@ -290,9 +404,82 @@ export function HomePage({
         </div>
       </section>
 
-      <ContainerVideosSection videos={videos} />
+      <ExportShowcaseSection onNavigate={onNavigate} surface="slate" />
 
       <AuctionProcessSection />
+
+      {/* Latest Blog Articles Preview */}
+      {blogs.filter((b) => b.status === 'Published').length > 0 && (
+        <section className="py-16 sm:py-20 bg-slate-50 border-b border-slate-200">
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-10">
+              <div className="max-w-xl">
+                <p className="text-sm font-medium text-blue-900 mb-2">
+                  Export Journal &amp; Buyer Guides
+                </p>
+                <h2 className="font-display text-2xl sm:text-3xl font-semibold tracking-tight text-zinc-950">
+                  Insights on Japanese auctions, shipping routes &amp; port clearance.
+                </h2>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => onNavigate('/blog')}
+                className="inline-flex items-center gap-2 text-sm font-medium text-blue-900 hover:text-blue-950 underline-offset-4 hover:underline cursor-pointer whitespace-nowrap shrink-0"
+              >
+                <span>View All Articles</span>
+                <ArrowRight className="w-4 h-4" aria-hidden="true" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-8">
+              {blogs
+                .filter((b) => b.status === 'Published')
+                .slice(0, 3)
+                .map((post) => (
+                  <button
+                    key={post.id}
+                    type="button"
+                    onClick={() =>
+                      onOpenBlogPost
+                        ? onOpenBlogPost(post.slug)
+                        : onNavigate(`/blog/${encodeURIComponent(post.slug)}`)
+                    }
+                    className="group text-left bg-white border border-slate-200 hover:border-blue-900 rounded-xl overflow-hidden flex flex-col justify-between transition-colors cursor-pointer"
+                  >
+                    <div>
+                      <div className="aspect-[16/10] w-full bg-slate-100 overflow-hidden border-b border-slate-200">
+                        <ResilientImage
+                          src={post.coverImage}
+                          alt={post.coverImageAlt}
+                          fallbackTitle={post.title}
+                          className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-300"
+                        />
+                      </div>
+                      <div className="p-5">
+                        <div className="flex items-center gap-2 text-xs text-slate-500">
+                          <span className="font-medium text-blue-900">{post.category}</span>
+                          <span aria-hidden="true">·</span>
+                          <span className="tabular-nums">{post.readTimeMinutes} min read</span>
+                        </div>
+                        <h3 className="mt-2 font-display text-lg font-semibold text-zinc-950 group-hover:text-blue-900 transition-colors line-clamp-2 leading-snug">
+                          {post.title}
+                        </h3>
+                        <p className="mt-2 text-xs sm:text-sm text-slate-600 line-clamp-2 leading-relaxed">
+                          {post.excerpt}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="px-5 py-3.5 border-t border-slate-100 bg-slate-50/60 inline-flex items-center gap-1.5 text-xs font-medium text-blue-900">
+                      <span>Read Full Guide</span>
+                      <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
+                    </div>
+                  </button>
+                ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Direct Quick Lead & Quote Form Section */}
       <section className="py-16 sm:py-20 bg-zinc-950 text-white">

@@ -15,11 +15,16 @@ export function Footer({ onNavigate }: FooterProps) {
               e.preventDefault();
               onNavigate('/');
             }}
-            className="font-display text-lg font-bold tracking-tight text-zinc-950"
+            aria-label="PJS Ventures Home"
+            className="inline-flex items-center"
           >
-            PJS Ventures
+            <img
+              src="/assets/aistudio/PJS_Ventures_-_Transparent__White_Theme__3ad2a367.png"
+              alt="PJS Ventures"
+              className="h-12 w-auto object-contain"
+            />
           </a>
-          <p className="mt-1 text-xs text-slate-500">
+          <p className="mt-2 text-xs text-slate-500">
             Yokohama <span aria-hidden="true">·</span> Caribbean <span aria-hidden="true">·</span>{' '}
             Africa <span aria-hidden="true">·</span> UK &amp; Europe <span aria-hidden="true">·</span>{' '}
             Oceania <span aria-hidden="true">·</span> trade@pjsventures.com
@@ -86,6 +91,16 @@ export function Footer({ onNavigate }: FooterProps) {
             className="hover:text-zinc-950 transition-colors"
           >
             How to Buy
+          </a>
+          <a
+            href="/blog"
+            onClick={(e) => {
+              e.preventDefault();
+              onNavigate('/blog');
+            }}
+            className="hover:text-zinc-950 transition-colors"
+          >
+            Blog
           </a>
           <span className="text-slate-400">© 2026 PJS Ventures</span>
         </div>

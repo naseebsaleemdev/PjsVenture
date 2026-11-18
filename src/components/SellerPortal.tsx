@@ -2,11 +2,11 @@ import { useState } from 'react';
 import {
   AlertTriangle,
   ArrowLeft,
+  BookOpen,
   Car,
   ChevronLeft,
   ChevronRight,
   Download,
-  Film,
   LogOut,
   Mail,
   MessageSquare,
@@ -33,6 +33,7 @@ import {
 } from '../data/seedInventory.ts';
 import { readPortalDarkMode, writePortalDarkMode } from '../lib/portalTheme.ts';
 import type {
+  BlogPost,
   BookingRequest,
   ExportVehicle,
   ListingMode,
@@ -43,16 +44,18 @@ import type {
   VehicleStatus,
 } from '../types/autoTrade.ts';
 import { PortTrackingProgress } from './PortTrackingProgress';
+import { PortalBlogsPanel } from './PortalBlogsPanel';
 import { PortalLoginGate } from './PortalLoginGate';
 import { PortalUsersPanel } from './PortalUsersPanel';
 import { ResilientImage } from './ResilientImage';
 
-type PortalTab = 'inventory' | 'add-vehicle' | 'bookings' | 'videos' | 'users';
+type PortalTab = 'inventory' | 'add-vehicle' | 'bookings' | 'blogs' | 'users';
 
 type DeleteTarget =
   | { kind: 'vehicle'; id: string; title: string; subtitle: string }
   | { kind: 'booking'; id: string; title: string; subtitle: string }
   | { kind: 'video'; id: string; title: string; subtitle: string }
+  | { kind: 'blog'; id: string; title: string; subtitle: string }
   | { kind: 'user'; id: string; title: string; subtitle: string }
   | null;
 
@@ -65,6 +68,7 @@ interface SellerPortalProps {
   vehicles: ExportVehicle[];
   bookings: BookingRequest[];
   videos: UnloadingVideo[];
+  blogs: BlogPost[];
   users: PortalUser[];
   onCreateVehicle: (vehicle: Omit<ExportVehicle, 'id' | 'createdAt'>) => Promise<void>;
   onUpdateVehicle: (id: string, updates: Partial<ExportVehicle>) => Promise<void>;
@@ -80,6 +84,10 @@ interface SellerPortalProps {
   onDeleteBooking: (id: string) => Promise<void>;
   onCreateVideo: (video: Omit<UnloadingVideo, 'id' | 'createdAt'>) => Promise<void>;
   onDeleteVideo: (id: string) => Promise<void>;
+  onCreateBlog: (blog: Omit<BlogPost, 'id' | 'createdAt'>) => Promise<void>;
+  onUpdateBlog: (id: string, updates: Partial<BlogPost>) => Promise<void>;
+  onDeleteBlog: (id: string) => Promise<void>;
+  onViewBlogPost: (slug: string) => void;
   onCreateUser: (user: Omit<PortalUser, 'id' | 'createdAt'>) => Promise<void>;
   onUpdateUser: (id: string, updates: Partial<PortalUser>) => Promise<void>;
   onDeleteUser: (id: string) => Promise<void>;
@@ -137,6 +145,7 @@ export function SellerPortal({
   vehicles,
   bookings,
   videos,
+  blogs,
   users,
   onCreateVehicle,
   onUpdateVehicle,
@@ -147,6 +156,10 @@ export function SellerPortal({
   onDeleteBooking,
   onCreateVideo,
   onDeleteVideo,
+  onCreateBlog,
+  onUpdateBlog,
+  onDeleteBlog,
+  onViewBlogPost,
   onCreateUser,
   onUpdateUser,
   onDeleteUser,
@@ -181,6 +194,8 @@ export function SellerPortal({
         await onDeleteBooking(deleteTarget.id);
       } else if (deleteTarget.kind === 'video') {
         await onDeleteVideo(deleteTarget.id);
+      } else if (deleteTarget.kind === 'blog') {
+        await onDeleteBlog(deleteTarget.id);
       } else if (deleteTarget.kind === 'user') {
         await onDeleteUser(deleteTarget.id);
       }
@@ -695,12 +710,17 @@ export function SellerPortal({
   }
 
   const perms = activeUser.permissions;
+  const canManageBlogs =
+    Boolean(activeUser.isPrimaryOwner) ||
+    perms.inventoryWrite ||
+    perms.videosManage ||
+    perms.usersManage;
 
   const isTabAllowed = (tab: PortalTab): boolean => {
     if (tab === 'inventory') return perms.inventoryRead;
     if (tab === 'add-vehicle') return perms.inventoryWrite;
     if (tab === 'bookings') return perms.bookingsRead;
-    if (tab === 'videos') return perms.videosManage;
+    if (tab === 'blogs') return canManageBlogs;
     if (tab === 'users') return perms.usersManage;
     return false;
   };
@@ -709,8 +729,8 @@ export function SellerPortal({
     ? 'inventory'
     : perms.bookingsRead
       ? 'bookings'
-      : perms.videosManage
-        ? 'videos'
+      : canManageBlogs
+        ? 'blogs'
         : perms.usersManage
           ? 'users'
           : 'inventory';
@@ -726,9 +746,16 @@ export function SellerPortal({
       {/* Left Portal Sidebar */}
       <aside className="w-full lg:w-64 bg-white dark:bg-zinc-900 border-b lg:border-b-0 lg:border-r border-slate-200 dark:border-zinc-800 flex flex-col justify-between shrink-0">
         <div>
-          <div className="h-16 px-6 flex items-center justify-between border-b border-slate-200 dark:border-zinc-800">
-            <span className="font-display text-lg font-bold tracking-tight text-zinc-950 dark:text-white">
-              PJS Ventures Portal
+          <div className="h-16 px-5 flex items-center gap-3 border-b border-slate-200 dark:border-zinc-800">
+            <div className="w-10 h-10 rounded-lg bg-white border border-slate-200 p-0.5 flex items-center justify-center shrink-0">
+              <img
+                src="/assets/aistudio/PJS_Ventures_-_Transparent__White_Theme__3ad2a367.png"
+                alt="PJS Ventures"
+                className="w-full h-full object-contain"
+              />
+            </div>
+            <span className="font-display text-base font-bold tracking-tight text-zinc-950 dark:text-white truncate">
+              Seller Portal
             </span>
           </div>
 
@@ -800,22 +827,22 @@ export function SellerPortal({
               </button>
             )}
 
-            {perms.videosManage && (
+            {canManageBlogs && (
               <button
                 type="button"
-                onClick={() => setActiveTab('videos')}
+                onClick={() => setActiveTab('blogs')}
                 className={`w-full flex items-center justify-between px-3.5 py-2.5 text-sm font-medium rounded-lg transition-colors cursor-pointer ${
-                  effectiveTab === 'videos'
+                  effectiveTab === 'blogs'
                     ? 'bg-blue-50 dark:bg-blue-950/60 text-blue-900 dark:text-blue-300'
                     : 'text-slate-600 dark:text-zinc-400 hover:bg-slate-50 dark:hover:bg-zinc-800/60 hover:text-zinc-950 dark:hover:text-white'
                 }`}
               >
                 <span className="flex items-center gap-3">
-                  <Film className="w-4 h-4 shrink-0" aria-hidden="true" />
-                  <span>Unloading Videos</span>
+                  <BookOpen className="w-4 h-4 shrink-0" aria-hidden="true" />
+                  <span>Blog Posts</span>
                 </span>
                 <span className="font-mono text-xs tabular-nums text-slate-500 dark:text-zinc-400">
-                  {videos.length}
+                  {blogs.length}
                 </span>
               </button>
             )}
@@ -879,8 +906,8 @@ export function SellerPortal({
                   ? editingVehicleId
                     ? 'Edit Vehicle'
                     : 'Publish New Vehicle'
-                  : effectiveTab === 'videos'
-                    ? 'Container Unloading Videos'
+                  : effectiveTab === 'blogs'
+                    ? 'Blog Posts & Articles'
                     : effectiveTab === 'users'
                       ? 'Team Users & Permissions'
                       : 'Form Leads & Client CRM'}
@@ -2298,235 +2325,26 @@ export function SellerPortal({
             </div>
           )}
 
-          {/* TAB 4: CONTAINER UNLOADING VIDEOS */}
-          {effectiveTab === 'videos' && perms.videosManage && (
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-              <form
-                onSubmit={handleSaveVideoSubmit}
-                className="lg:col-span-5 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl p-6 space-y-4"
-              >
-                <div className="border-b border-slate-200 dark:border-zinc-800 pb-3">
-                  <h2 className="font-display text-lg font-semibold text-zinc-950 dark:text-white">
-                    Add Container Unloading Clip
-                  </h2>
-                  <p className="text-xs text-slate-500 dark:text-zinc-400 mt-1">
-                    Publish a new video reel to the home page container unloading showcase.
-                  </p>
-                </div>
-
-                {videoFormError && (
-                  <p className="text-xs text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/60 rounded-lg px-3 py-2.5">
-                    {videoFormError}
-                  </p>
-                )}
-
-                <div>
-                  <label className="block text-xs font-medium text-zinc-950 dark:text-zinc-200 mb-1">
-                    Clip Title *
-                  </label>
-                  <input
-                    type="text"
-                    value={videoTitle}
-                    onChange={(e) => setVideoTitle(e.target.value)}
-                    placeholder="e.g. Toyota Prado 4x4 Rolling Off 40ft Ramp"
-                    className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-950 dark:text-zinc-100 placeholder:text-slate-400 dark:placeholder:text-zinc-500"
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-zinc-950 dark:text-zinc-200 mb-1">
-                      Destination Port
-                    </label>
-                    <input
-                      type="text"
-                      value={videoPortLabel}
-                      onChange={(e) => setVideoPortLabel(e.target.value)}
-                      placeholder="Port of Nassau, Bahamas"
-                      className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-950 dark:text-zinc-100"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-zinc-950 dark:text-zinc-200 mb-1">
-                      Container Type
-                    </label>
-                    <select
-                      value={videoContainerType}
-                      onChange={(e) => setVideoContainerType(e.target.value)}
-                      className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-950 dark:text-zinc-100"
-                    >
-                      <option value="40ft High-Cube Container">40ft High-Cube Container</option>
-                      <option value="20ft Dedicated Container">20ft Dedicated Container</option>
-                      <option value="40ft Shared Container">40ft Shared Container</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div className="sm:col-span-2">
-                    <label className="block text-xs font-medium text-zinc-950 dark:text-zinc-200 mb-1">
-                      Vehicle Summary
-                    </label>
-                    <input
-                      type="text"
-                      value={videoVehicleSummary}
-                      onChange={(e) => setVideoVehicleSummary(e.target.value)}
-                      placeholder="e.g. 2021 Land Cruiser Prado TX"
-                      className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-950 dark:text-zinc-100 placeholder:text-slate-400 dark:placeholder:text-zinc-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-zinc-950 dark:text-zinc-200 mb-1">
-                      Duration
-                    </label>
-                    <input
-                      type="text"
-                      value={videoDurationLabel}
-                      onChange={(e) => setVideoDurationLabel(e.target.value)}
-                      placeholder="0:12"
-                      className="w-full px-3 py-2 text-sm font-mono rounded-lg border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-950 dark:text-zinc-100"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="block text-xs font-medium text-zinc-950 dark:text-zinc-200">
-                    Video Source (Upload MP4/WebM or Paste URL) *
-                  </label>
-                  <label className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-medium text-zinc-950 dark:text-zinc-100 bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 rounded-lg cursor-pointer transition-colors">
-                    <Upload className="w-4 h-4" aria-hidden="true" />
-                    <span>Upload MP4 / WebM Clip (max 8 MB)</span>
-                    <input
-                      type="file"
-                      accept="video/mp4,video/webm"
-                      onChange={handleVideoFileUpload}
-                      className="sr-only"
-                    />
-                  </label>
-                  <input
-                    type="text"
-                    value={videoUrl.startsWith('data:') ? 'Uploaded video clip attached' : videoUrl}
-                    onChange={(e) => setVideoUrl(e.target.value)}
-                    placeholder="https://...mp4 or YouTube URL"
-                    className="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-950 dark:text-zinc-100 placeholder:text-slate-400 dark:placeholder:text-zinc-500"
-                  />
-                </div>
-
-                <div>
-                  <div className="text-xs font-medium text-zinc-950 dark:text-zinc-200 mb-1.5">
-                    Thumbnail Poster Scene
-                  </div>
-                  <div className="grid grid-cols-3 gap-2">
-                    {CONTAINER_POSTER_PRESETS.map((preset) => (
-                      <button
-                        key={preset.src}
-                        type="button"
-                        onClick={() => setVideoPosterUrl(preset.src)}
-                        className={`rounded-lg overflow-hidden border text-left cursor-pointer ${
-                          videoPosterUrl === preset.src
-                            ? 'border-blue-900 dark:border-blue-500 ring-2 ring-blue-900/20 dark:ring-blue-500/30'
-                            : 'border-slate-200 dark:border-zinc-700'
-                        }`}
-                      >
-                        <div className="aspect-video bg-slate-100 dark:bg-zinc-800">
-                          <ResilientImage
-                            src={preset.src}
-                            alt={preset.label}
-                            fallbackTitle={preset.label}
-                            className="w-full h-full object-cover"
-                          />
-                        </div>
-                        <div className="px-1.5 py-1 text-[10px] font-medium text-zinc-950 dark:text-zinc-200 truncate">
-                          {preset.label}
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={videoSaving}
-                  className="w-full py-2.5 text-sm font-medium text-white bg-blue-900 hover:bg-blue-950 dark:bg-blue-700 dark:hover:bg-blue-600 disabled:bg-slate-400 dark:disabled:bg-zinc-700 rounded-lg cursor-pointer"
-                >
-                  {videoSaving ? 'Publishing Clip...' : 'Publish Unloading Video'}
-                </button>
-              </form>
-
-              <div className="lg:col-span-7 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl overflow-hidden">
-                <div className="p-5 border-b border-slate-200 dark:border-zinc-800 flex items-center justify-between">
-                  <div>
-                    <h2 className="font-display text-lg font-semibold text-zinc-950 dark:text-white">
-                      Published Unloading Clips
-                    </h2>
-                    <p className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
-                      Live in the Container Arrival & Unloading section on your Home Page.
-                    </p>
-                  </div>
-                  <span className="font-mono text-xs text-slate-500 dark:text-zinc-400 tabular-nums">
-                    {videos.length} reels
-                  </span>
-                </div>
-
-                {videos.length === 0 ? (
-                  <div className="p-10 text-center text-sm text-slate-500 dark:text-zinc-400">
-                    No unloading videos published yet. Use the form on the left to add one.
-                  </div>
-                ) : (
-                  <div className="divide-y divide-slate-100 dark:divide-zinc-800">
-                    {videos.map((clip) => (
-                      <div
-                        key={clip.id}
-                        className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50/70 dark:hover:bg-zinc-800/40"
-                      >
-                        <div className="flex items-center gap-3.5 min-w-0">
-                          <div className="w-28 aspect-video rounded-lg overflow-hidden bg-slate-100 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 shrink-0">
-                            <ResilientImage
-                              src={clip.posterUrl}
-                              alt={clip.title}
-                              fallbackTitle={clip.title}
-                              className="w-full h-full object-cover"
-                            />
-                          </div>
-                          <div className="min-w-0">
-                            <div className="text-sm font-semibold text-zinc-950 dark:text-white truncate">
-                              {clip.title}
-                            </div>
-                            <div className="text-xs text-blue-900 dark:text-blue-400 font-medium truncate mt-0.5">
-                              {clip.portLabel}
-                            </div>
-                            <div className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5 truncate">
-                              {clip.vehicleSummary} ·{' '}
-                              <span className="font-mono tabular-nums">{clip.durationLabel}</span> ·{' '}
-                              {clip.containerType}
-                            </div>
-                          </div>
-                        </div>
-
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setDeleteError(null);
-                            setDeleteTarget({
-                              kind: 'video',
-                              id: clip.id,
-                              title: clip.title,
-                              subtitle: clip.portLabel,
-                            });
-                          }}
-                          aria-label={`Delete ${clip.title}`}
-                          className="self-start sm:self-center inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-500 dark:text-zinc-400 hover:text-red-700 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-lg transition-colors cursor-pointer shrink-0"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
-                          <span>Delete</span>
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
+          {/* TAB 4: BLOG POSTS MANAGER */}
+          {effectiveTab === 'blogs' && canManageBlogs && (
+            <PortalBlogsPanel
+              blogs={blogs}
+              defaultAuthorName={activeUser.name}
+              onCreateBlog={onCreateBlog}
+              onUpdateBlog={onUpdateBlog}
+              onRequestDeleteBlog={(post) => {
+                setDeleteError(null);
+                setDeleteTarget({
+                  kind: 'blog',
+                  id: post.id,
+                  title: post.title,
+                  subtitle: `/blog/${post.slug} · ${post.category}`,
+                });
+              }}
+              onViewLivePost={onViewBlogPost}
+            />
           )}
+
           {/* TAB 5: TEAM USERS & RBAC PERMISSIONS */}
           {effectiveTab === 'users' && perms.usersManage && (
             <PortalUsersPanel
@@ -2582,7 +2400,9 @@ export function SellerPortal({
                         ? 'Delete Lead?'
                         : deleteTarget.kind === 'video'
                           ? 'Delete Unloading Clip?'
-                          : 'Delete Team User?'}
+                          : deleteTarget.kind === 'blog'
+                            ? 'Delete Blog Article?'
+                            : 'Delete Team User?'}
                   </h2>
                   <p className="text-xs text-slate-600 dark:text-zinc-400 mt-1 leading-relaxed">
                     Are you sure you want to permanently delete this record? This action cannot be

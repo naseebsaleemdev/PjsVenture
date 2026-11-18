@@ -9,9 +9,11 @@ export type AppRoute =
   | '/ports'
   | '/calculator'
   | '/how-to-buy'
+  | '/blog'
   | '/book'
   | '/portal'
-  | `/listing/${string}`;
+  | `/listing/${string}`
+  | `/blog/${string}`;
 
 interface NavbarProps {
   currentRoute: AppRoute;
@@ -21,10 +23,10 @@ interface NavbarProps {
 const NAV_ITEMS: { label: string; route: AppRoute }[] = [
   { label: 'Inventory', route: '/inventory' },
   { label: 'Port Deals', route: '/port-deals' },
-  { label: 'Global Markets', route: '/markets' },
   { label: 'Global Ports', route: '/ports' },
   { label: 'CIF Calculator', route: '/calculator' },
   { label: 'How to Buy', route: '/how-to-buy' },
+  { label: 'Blog', route: '/blog' },
 ];
 
 export function Navbar({ currentRoute, onNavigate }: NavbarProps) {
@@ -38,16 +40,21 @@ export function Navbar({ currentRoute, onNavigate }: NavbarProps) {
   return (
     <header className="sticky top-0 z-40 bg-slate-50/95 backdrop-blur-sm border-b border-slate-200">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-6">
-        {/* Zone 1: Brand Wordmark */}
+        {/* Zone 1: Brand Logo */}
         <a
           href="/"
           onClick={(e) => {
             e.preventDefault();
             go('/');
           }}
-          className="font-display text-xl font-bold tracking-tight text-zinc-950 whitespace-nowrap shrink-0 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-blue-900 rounded"
+          aria-label="PJS Ventures Home"
+          className="inline-flex items-center shrink-0 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-blue-900 rounded"
         >
-          PJS Ventures
+          <img
+            src="/assets/aistudio/PJS_Ventures_-_Transparent__White_Theme__3ad2a367.png"
+            alt="PJS Ventures"
+            className="h-12 w-auto object-contain"
+          />
         </a>
 
         {/* Zone 2: Navigation Links */}
@@ -58,7 +65,8 @@ export function Navbar({ currentRoute, onNavigate }: NavbarProps) {
           {NAV_ITEMS.map((item) => {
             const active =
               currentRoute === item.route ||
-              (item.route === '/inventory' && currentRoute.startsWith('/listing/'));
+              (item.route === '/inventory' && currentRoute.startsWith('/listing/')) ||
+              (item.route === '/blog' && currentRoute.startsWith('/blog/'));
             return (
               <a
                 key={item.route}

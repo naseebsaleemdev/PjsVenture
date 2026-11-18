@@ -1,12 +1,10 @@
 import { ArrowRight, CheckCircle2, FileCheck2, ShieldCheck } from 'lucide-react';
-import type { UnloadingVideo } from '../types/autoTrade.ts';
 import { AuctionProcessSection } from './AuctionProcessSection';
-import { ContainerVideosSection } from './ContainerVideosSection';
+import { ExportShowcaseSection } from './ExportShowcaseSection';
 import type { AppRoute } from './Navbar';
 import { PageBanner } from './PageBanner';
 
 interface HowToBuyPageProps {
-  videos: UnloadingVideo[];
   onNavigate: (route: AppRoute) => void;
 }
 
@@ -56,7 +54,7 @@ const PRE_EXPORT_CHECKS = [
   },
 ];
 
-export function HowToBuyPage({ videos, onNavigate }: HowToBuyPageProps) {
+export function HowToBuyPage({ onNavigate }: HowToBuyPageProps) {
   return (
     <div>
       <PageBanner
@@ -135,11 +133,11 @@ export function HowToBuyPage({ videos, onNavigate }: HowToBuyPageProps) {
         </div>
       </section>
 
-      {/* Container Unloading Reels */}
-      <ContainerVideosSection videos={videos} />
+      {/* Inspection, Container Loading & Port Delivery Gallery */}
+      <ExportShowcaseSection onNavigate={onNavigate} />
 
       {/* Bottom Quick Action Band */}
-      <section className="py-14 bg-white border-t border-slate-200">
+      <section className="py-14 bg-slate-50">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div>
             <div className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-800 mb-1">

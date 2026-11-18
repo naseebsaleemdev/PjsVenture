@@ -155,3 +155,26 @@ export interface PortalUser {
   createdAt: string;
 }
 
+export type BlogCategory =
+  | 'Import Guides'
+  | 'Auction Tips'
+  | 'Port & Customs'
+  | 'Market Updates';
+
+export type BlogStatus = 'Published' | 'Draft';
+
+export interface BlogPost {
+  id: string;
+  slug: string;
+  title: string;
+  excerpt: string;
+  content: string;
+  category: BlogCategory;
+  authorName: string;
+  readTimeMinutes: number;
+  coverImage: string;
+  coverImageAlt: string;
+  status: BlogStatus;
+  createdAt: string;
+  updatedAt?: string;
+}

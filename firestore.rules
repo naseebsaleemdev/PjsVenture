@@ -59,10 +59,6 @@ service cloud.firestore {
       return isVerifiedUser() && requesterEmail() == 'naseebsaleemvmi@gmail.com';
     }
 
-    function portalUserPath() {
-      return /databases/$(database)/documents/portalUsers/$(requesterEmailKey());
-    }
-
     function isActiveUserDoc(u) {
       return u is map &&
         u.active == true &&
@@ -102,67 +98,83 @@ service cloud.firestore {
       return isActiveUserDoc(u) && u.permissions.usersManage == true;
     }
 
+    function userCanManageBlogs(u) {
+      return isActiveUserDoc(u) && (
+        u.permissions.inventoryWrite == true ||
+        u.permissions.videosManage == true ||
+        u.permissions.usersManage == true
+      );
+    }
+
     function isPortalAdmin() {
       return isPrimaryOwner() || (
         isVerifiedUser() &&
-        exists(portalUserPath()) &&
-        userIsPortalAdmin(get(portalUserPath()).data)
+        exists(/databases/$(database)/documents/portalUsers/$(requesterEmailKey())) &&
+        userIsPortalAdmin(get(/databases/$(database)/documents/portalUsers/$(requesterEmailKey())).data)
       );
     }
 
     function canWriteInventory() {
       return isPrimaryOwner() || (
         isVerifiedUser() &&
-        exists(portalUserPath()) &&
-        userCanWriteInventory(get(portalUserPath()).data)
+        exists(/databases/$(database)/documents/portalUsers/$(requesterEmailKey())) &&
+        userCanWriteInventory(get(/databases/$(database)/documents/portalUsers/$(requesterEmailKey())).data)
       );
     }
 
     function canDeleteInventory() {
       return isPrimaryOwner() || (
         isVerifiedUser() &&
-        exists(portalUserPath()) &&
-        userCanDeleteInventory(get(portalUserPath()).data)
+        exists(/databases/$(database)/documents/portalUsers/$(requesterEmailKey())) &&
+        userCanDeleteInventory(get(/databases/$(database)/documents/portalUsers/$(requesterEmailKey())).data)
       );
     }
 
     function canReadBookings() {
       return isPrimaryOwner() || (
         isVerifiedUser() &&
-        exists(portalUserPath()) &&
-        userCanReadBookings(get(portalUserPath()).data)
+        exists(/databases/$(database)/documents/portalUsers/$(requesterEmailKey())) &&
+        userCanReadBookings(get(/databases/$(database)/documents/portalUsers/$(requesterEmailKey())).data)
       );
     }
 
     function canWriteBookings() {
       return isPrimaryOwner() || (
         isVerifiedUser() &&
-        exists(portalUserPath()) &&
-        userCanWriteBookings(get(portalUserPath()).data)
+        exists(/databases/$(database)/documents/portalUsers/$(requesterEmailKey())) &&
+        userCanWriteBookings(get(/databases/$(database)/documents/portalUsers/$(requesterEmailKey())).data)
       );
     }
 
     function canDeleteBookings() {
       return isPrimaryOwner() || (
         isVerifiedUser() &&
-        exists(portalUserPath()) &&
-        userCanDeleteBookings(get(portalUserPath()).data)
+        exists(/databases/$(database)/documents/portalUsers/$(requesterEmailKey())) &&
+        userCanDeleteBookings(get(/databases/$(database)/documents/portalUsers/$(requesterEmailKey())).data)
       );
     }
 
     function canManageVideos() {
       return isPrimaryOwner() || (
         isVerifiedUser() &&
-        exists(portalUserPath()) &&
-        userCanManageVideos(get(portalUserPath()).data)
+        exists(/databases/$(database)/documents/portalUsers/$(requesterEmailKey())) &&
+        userCanManageVideos(get(/databases/$(database)/documents/portalUsers/$(requesterEmailKey())).data)
       );
     }
 
     function canManageUsers() {
       return isPrimaryOwner() || (
         isVerifiedUser() &&
-        exists(portalUserPath()) &&
-        userCanManageUsers(get(portalUserPath()).data)
+        exists(/databases/$(database)/documents/portalUsers/$(requesterEmailKey())) &&
+        userCanManageUsers(get(/databases/$(database)/documents/portalUsers/$(requesterEmailKey())).data)
+      );
+    }
+
+    function canManageBlogs() {
+      return isPrimaryOwner() || (
+        isVerifiedUser() &&
+        exists(/databases/$(database)/documents/portalUsers/$(requesterEmailKey())) &&
+        userCanManageBlogs(get(/databases/$(database)/documents/portalUsers/$(requesterEmailKey())).data)
       );
     }
 
@@ -497,6 +509,62 @@ service cloud.firestore {
         data.createdAt is timestamp;
     }
 
+    function isValidBlog(data) {
+      return data.keys().hasAll([
+          'id',
+          'slug',
+          'title',
+          'excerpt',
+          'content',
+          'category',
+          'authorName',
+          'readTimeMinutes',
+          'coverImage',
+          'coverImageAlt',
+          'status',
+          'createdAt'
+        ]) &&
+        data.keys().hasOnly([
+          'id',
+          'slug',
+          'title',
+          'excerpt',
+          'content',
+          'category',
+          'authorName',
+          'readTimeMinutes',
+          'coverImage',
+          'coverImageAlt',
+          'status',
+          'createdAt',
+          'updatedAt'
+        ]) &&
+        isValidId(data.id) &&
+        isNonEmptyStr(data.slug, 140) &&
+        data.slug.matches('^[a-z0-9\\-]+$') &&
+        isNonEmptyStr(data.title, 180) &&
+        isNonEmptyStr(data.excerpt, 400) &&
+        isNonEmptyStr(data.content, 15000) &&
+        data.category in ['Import Guides', 'Auction Tips', 'Port & Customs', 'Market Updates'] &&
+        isNonEmptyStr(data.authorName, 100) &&
+        data.readTimeMinutes is int &&
+        data.readTimeMinutes >= 1 &&
+        data.readTimeMinutes <= 60 &&
+        isNonEmptyStr(data.coverImage, 350000) &&
+        isNonEmptyStr(data.coverImageAlt, 240) &&
+        data.status in ['Published', 'Draft'] &&
+        data.createdAt is timestamp &&
+        (!('updatedAt' in data) || data.updatedAt is timestamp);
+    }
+
+    function isValidSystemFlag(data) {
+      return data.keys().hasAll(['id', 'initialized', 'createdAt']) &&
+        data.keys().hasOnly(['id', 'initialized', 'createdAt']) &&
+        isValidId(data.id) &&
+        data.initialized is bool &&
+        data.createdAt is timestamp;
+    }
+
     // ---------------------------------------------------------
     // Collection Rules
     // ---------------------------------------------------------
@@ -656,6 +724,49 @@ service cloud.firestore {
         existing().isPrimaryOwner == false &&
         userId != requesterEmailKey() &&
         canManageUsers();
+    }
+
+    // Public Japanese auto export blog posts (contains zero PII)
+    match /blogs/{blogId} {
+      allow get: if isValidId(blogId);
+      allow list: if true;
+      allow create: if isValidId(blogId) &&
+        isValidBlog(incoming()) &&
+        incoming().id == blogId &&
+        incoming().createdAt == request.time &&
+        canManageBlogs();
+      allow update: if isValidId(blogId) &&
+        isValidBlog(incoming()) &&
+        incoming().id == existing().id &&
+        incoming().createdAt == existing().createdAt &&
+        (!('updatedAt' in incoming()) || incoming().updatedAt == request.time) &&
+        canManageBlogs() &&
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'slug',
+          'title',
+          'excerpt',
+          'content',
+          'category',
+          'authorName',
+          'readTimeMinutes',
+          'coverImage',
+          'coverImageAlt',
+          'status',
+          'updatedAt'
+        ]);
+      allow delete: if isValidId(blogId) && canManageBlogs();
+    }
+
+    // Immutable one-time initialization flags (non-PII)
+    match /systemFlags/{flagId} {
+      allow get: if isValidId(flagId);
+      allow list: if false;
+      allow create: if isValidId(flagId) &&
+        isValidSystemFlag(incoming()) &&
+        incoming().id == flagId &&
+        incoming().createdAt == request.time &&
+        canManageBlogs();
+      allow update, delete: if false;
     }
   }
 }

@@ -361,6 +361,112 @@
         "isPrimaryOwner",
         "createdAt"
       ]
+    },
+    "BlogPost": {
+      "title": "BlogPost",
+      "description": "Public Japanese auto export blog article managed via Seller Portal CRM.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "slug": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 140,
+          "pattern": "^[a-z0-9\\-]+$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 180
+        },
+        "excerpt": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 400
+        },
+        "content": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 15000
+        },
+        "category": {
+          "type": "string",
+          "enum": ["Import Guides", "Auction Tips", "Port & Customs", "Market Updates"]
+        },
+        "authorName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "readTimeMinutes": {
+          "type": "integer"
+        },
+        "coverImage": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 350000
+        },
+        "coverImageAlt": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 240
+        },
+        "status": {
+          "type": "string",
+          "enum": ["Published", "Draft"]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "maxLength": 64
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "maxLength": 64
+        }
+      },
+      "required": [
+        "id",
+        "slug",
+        "title",
+        "excerpt",
+        "content",
+        "category",
+        "authorName",
+        "readTimeMinutes",
+        "coverImage",
+        "coverImageAlt",
+        "status",
+        "createdAt"
+      ]
+    },
+    "SystemFlag": {
+      "title": "SystemFlag",
+      "description": "Immutable one-time initialization flag preventing re-seeding after admin deletions.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "initialized": {
+          "type": "boolean"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "maxLength": 64
+        }
+      },
+      "required": ["id", "initialized", "createdAt"]
     }
   },
   "firestore": {
@@ -379,6 +485,14 @@
     "/portalUsers/{userId}": {
       "schema": "PortalUser",
       "description": "Authorized team accounts keyed deterministically by sanitized lowercase email for O(1) RBAC checks."
+    },
+    "/blogs/{blogId}": {
+      "schema": "BlogPost",
+      "description": "Publicly readable editorial blog posts managed by authorized Seller Portal staff."
+    },
+    "/systemFlags/{flagId}": {
+      "schema": "SystemFlag",
+      "description": "One-time bootstrap flags preventing re-seeding deleted starter records."
     }
   }
 }

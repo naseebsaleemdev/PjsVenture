@@ -1,9 +1,13 @@
+import 'dotenv/config';
+import { GoogleGenAI } from '@google/genai';
 import express from 'express';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
 import {
+  DESTINATION_PORTS,
+  EXPORT_STEPS,
   INITIAL_BOOKINGS,
   INITIAL_UNLOADING_VIDEOS,
   INITIAL_VEHICLES,
@@ -78,6 +82,160 @@ async function startServer() {
   const PORT = Number(process.env.PORT) || 3000;
 
   app.use(express.json({ limit: '15mb' }));
+
+  interface ChatMessageInput {
+    role: 'user' | 'model';
+    text: string;
+  }
+
+  interface ChatVehicleContext {
+    id: string;
+    year: number;
+    makeModel: string;
+    trim: string;
+    status: string;
+    chassisCode: string;
+    fobUsd: number;
+    fuel: string;
+    drive: string;
+    steering: string;
+    mileageKm: number;
+    dealType: string;
+    destinationPortLabel: string;
+    balanceDueUsd: number;
+    priorDepositUsd: number;
+    overallGrade: string;
+  }
+
+  // PJS Ventures Buyer & Export Concierge Chat API (Server-Side Gemini)
+  app.post('/api/chat', async (req, res) => {
+    const apiKey = process.env.GEMINI_API_KEY?.trim();
+    if (!apiKey) {
+      res.status(503).json({
+        error:
+          'Chat assistant is not configured yet (missing GEMINI_API_KEY). Add GEMINI_API_KEY in Settings > Secrets to enable live chat.',
+      });
+      return;
+    }
+
+    const body = req.body as {
+      messages?: ChatMessageInput[];
+      vehicles?: ChatVehicleContext[];
+      currency?: string;
+    };
+
+    const rawMessages = Array.isArray(body?.messages) ? body.messages : [];
+    const sanitizedMessages = rawMessages
+      .filter(
+        (m): m is ChatMessageInput =>
+          Boolean(m) &&
+          (m.role === 'user' || m.role === 'model') &&
+          typeof m.text === 'string' &&
+          m.text.trim().length > 0,
+      )
+      .slice(-16)
+      .map((m) => ({
+        role: m.role,
+        parts: [{ text: m.text.trim().slice(0, 2000) }],
+      }));
+
+    if (sanitizedMessages.length === 0) {
+      res.status(400).json({ error: 'Please enter a message before sending.' });
+      return;
+    }
+
+    const liveVehicles = Array.isArray(body?.vehicles) ? body.vehicles.slice(0, 40) : [];
+    const vehicleCatalogSummary =
+      liveVehicles.length > 0
+        ? liveVehicles
+            .map(
+              (v) =>
+                `- [${v.year} ${v.makeModel} ${v.trim}] | Chassis: ${v.chassisCode} | Status: ${v.status} | Type: ${v.dealType === 'balance-release' ? 'Port Balance-Release' : 'Direct Japan Import'} | Port: ${v.destinationPortLabel} | Grade: ${v.overallGrade} | Mileage: ${v.mileageKm.toLocaleString('en-US')} km | ${v.fuel}/${v.drive}/${v.steering} | FOB: $${v.fobUsd.toLocaleString('en-US')} USD | Listed/Balance Due: $${v.balanceDueUsd.toLocaleString('en-US')} USD${v.priorDepositUsd > 0 ? ` (Prior deposit paid: $${v.priorDepositUsd.toLocaleString('en-US')} USD)` : ''}`,
+            )
+            .join('\n')
+        : 'No vehicles are currently listed in live stock. Recommend submitting a Custom Auction Order on the Book a Vehicle page so PJS Ventures can source a unit directly from Japanese auctions (USS, TAA, HAA, JU).';
+
+    const portsSummary = DESTINATION_PORTS.map(
+      (p) =>
+        `- ${p.name}, ${p.country} (${p.region}): Transit ${p.transitDays} | RoRo $${p.roroUsd} | 20ft Container $${p.container20Usd} | 40ft Shared $${p.container40SharedUsd} | ${p.complianceNote}`,
+    ).join('\n');
+
+    const processSummary = EXPORT_STEPS.map(
+      (s) => `${s.step}. ${s.title} (${s.window}): ${s.description}`,
+    ).join('\n');
+
+    const systemInstruction = `You are the official PJS Ventures Export Concierge — a helpful, knowledgeable automotive export specialist representing PJS Ventures (Yokohama, Japan).
+
+Your job:
+- Help international vehicle buyers and dealers compare stock, estimate RoRo or container shipping costs to 30+ global ports, understand Japanese auction grades, and book either Direct Japan Imports or Port Balance-Release deals.
+- Always respond in clear English, or match the buyer's language if they write in Spanish, French, Arabic, or Japanese. Keep answers concise, clear, scannable, and practical (under ~180 words unless detailed specs are requested).
+- Only state vehicle specs, chassis codes, prices, and port rates from the LIVE DATA below. Never invent fake inventory or unverified shipping quotes.
+- If a buyer wants to reserve a unit, lock a CIF quote, or request a vehicle not yet in stock, guide them to the "Book a Vehicle" page or "CIF Calculator" on the website, or trade@pjsventures.com.
+- Never mention AI models, prompts, APIs, or internal tooling. Speak purely as PJS Ventures Trade Support.
+
+LIVE INVENTORY (${liveVehicles.length} units, buyer display currency: ${body?.currency || 'USD'}):
+${vehicleCatalogSummary}
+
+GLOBAL DESTINATION PORTS & FREIGHT MATRIX (USD base rates):
+${portsSummary}
+
+HOW PJS VENTURES EXPORT WORKS:
+${processSummary}
+
+PORT BALANCE-RELEASE DEALS EXPLAINED:
+A Port Balance-Release unit is already shipped or docked after a prior buyer paid an initial deposit (often 35%–45%) and forfeited/defaulted. A new buyer only pays the remaining Balance Due to receive express Bill of Lading (B/L) re-assignment and clear the car at the specified destination port.`;
+
+    try {
+      const ai = new GoogleGenAI({
+        apiKey,
+        httpOptions: {
+          headers: {
+            'User-Agent': 'aistudio-build',
+          },
+        },
+      });
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-4-hydrogen',
+        contents: sanitizedMessages,
+        config: {
+          systemInstruction,
+        },
+      });
+
+      const reply = response.text?.trim();
+      if (!reply) {
+        res.status(502).json({
+          error: 'Could not generate a response right now. Please try asking again.',
+        });
+        return;
+      }
+
+      res.json({ reply });
+    } catch (err) {
+      const status = (err as { status?: number })?.status;
+      const rawMessage = err instanceof Error ? err.message : 'Unexpected chat service error.';
+      console.error('PJS Ventures /api/chat error:', err);
+
+      if (status === 400 || status === 403 || rawMessage.includes('API_KEY_INVALID') || rawMessage.includes('PERMISSION_DENIED')) {
+        res.status(status === 400 ? 400 : 403).json({
+          error:
+            'Chat service API key needs attention. Please check GEMINI_API_KEY in Settings > Secrets.',
+        });
+        return;
+      }
+      if (status === 429 || rawMessage.includes('RESOURCE_EXHAUSTED')) {
+        res.status(429).json({
+          error: 'Chat service is temporarily busy due to rate limits. Please try again in a moment.',
+        });
+        return;
+      }
+
+      res.status(500).json({
+        error: rawMessage,
+      });
+    }
+  });
 
   // Public & Portal Vehicle Inventory API
   app.get('/api/vehicles', (_req, res) => {

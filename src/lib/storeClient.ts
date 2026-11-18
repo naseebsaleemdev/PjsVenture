@@ -17,7 +17,11 @@ import {
   INITIAL_UNLOADING_VIDEOS,
   INITIAL_VEHICLES,
 } from '../data/seedInventory.ts';
+import { INITIAL_BLOG_POSTS } from '../data/seedBlogs.ts';
 import type {
+  BlogCategory,
+  BlogPost,
+  BlogStatus,
   BookingRequest,
   ExportVehicle,
   PortalPermissions,
@@ -204,19 +208,134 @@ function docToPortalUser(raw: Record<string, unknown>, docId: string): PortalUse
   );
 }
 
+function docToBlog(raw: Record<string, unknown>, docId: string): BlogPost {
+  const validCategories: BlogCategory[] = [
+    'Import Guides',
+    'Auction Tips',
+    'Port & Customs',
+    'Market Updates',
+  ];
+  const category = validCategories.includes(raw.category as BlogCategory)
+    ? (raw.category as BlogCategory)
+    : 'Import Guides';
+  const status: BlogStatus = raw.status === 'Draft' ? 'Draft' : 'Published';
+
+  return {
+    id: String(raw.id || docId),
+    slug: String(raw.slug || docId).toLowerCase(),
+    title: String(raw.title || 'Untitled Article'),
+    excerpt: String(raw.excerpt || ''),
+    content: String(raw.content || ''),
+    category,
+    authorName: String(raw.authorName || 'PJS Ventures Editorial'),
+    readTimeMinutes: Math.max(1, Math.min(60, Math.round(Number(raw.readTimeMinutes) || 3))),
+    coverImage: String(raw.coverImage || '/src/assets/images/yokohama_inspection_bay_1794999716476.jpg'),
+    coverImageAlt: String(raw.coverImageAlt || raw.title || 'PJS Ventures Export Article'),
+    status,
+    createdAt: toIsoString(raw.createdAt),
+    ...(raw.updatedAt ? { updatedAt: toIsoString(raw.updatedAt) } : {}),
+  };
+}
+
+export function slugifyBlogTitle(raw: string): string {
+  const clean = raw
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 120);
+  return clean || `article-${Date.now()}`;
+}
+
+function estimateReadTimeMinutes(content: string): number {
+  const words = content.trim().split(/\s+/).filter(Boolean).length;
+  return Math.min(60, Math.max(1, Math.round(words / 180)));
+}
+
+function buildBlogDocPayload(
+  id: string,
+  input: Omit<BlogPost, 'id' | 'createdAt'>,
+  mode: 'create' | 'update',
+) {
+  const cleanSlug = slugifyBlogTitle(input.slug || input.title);
+  const cleanTitle = clampStr(input.title, 180);
+  const cleanExcerpt = clampStr(input.excerpt, 400);
+  const cleanContent = clampStr(input.content, 15000);
+  const cleanCover = clampStr(input.coverImage, 350000);
+
+  if (!cleanTitle) throw new Error('Article title is required.');
+  if (!cleanExcerpt) throw new Error('Article summary / excerpt is required.');
+  if (!cleanContent) throw new Error('Article content is required.');
+  if (!cleanCover) throw new Error('A cover photo is required.');
+
+  const readMinutes = Math.min(
+    60,
+    Math.max(1, Math.round(Number(input.readTimeMinutes) || estimateReadTimeMinutes(cleanContent))),
+  );
+
+  const payload: Record<string, unknown> = {
+    id,
+    slug: cleanSlug,
+    title: cleanTitle,
+    excerpt: cleanExcerpt,
+    content: cleanContent,
+    category: input.category,
+    authorName: clampStr(input.authorName, 100) || 'PJS Ventures Editorial',
+    readTimeMinutes: readMinutes,
+    coverImage: cleanCover,
+    coverImageAlt: clampStr(input.coverImageAlt, 240) || cleanTitle,
+    status: input.status === 'Draft' ? 'Draft' : 'Published',
+  };
+
+  if (mode === 'create') {
+    payload.createdAt = serverTimestamp();
+  } else {
+    payload.updatedAt = serverTimestamp();
+  }
+
+  return payload;
+}
+
 export function subscribePublicCatalog(
   onVehicles: (vehicles: ExportVehicle[]) => void,
   onVideos: (videos: UnloadingVideo[]) => void,
   onReady?: () => void,
+  onBlogs?: (blogs: BlogPost[], isSeededInCloud: boolean) => void,
 ): Unsubscribe {
   let vehiclesReady = false;
   let videosReady = false;
+  let blogsReady = !onBlogs;
+  let cachedBlogDocs: BlogPost[] = [];
+  let cachedFlagKnown = false;
+  let cachedFlagExists = false;
 
   const markReady = () => {
-    if (vehiclesReady && videosReady && onReady) {
+    if (vehiclesReady && videosReady && blogsReady && onReady) {
       onReady();
     }
   };
+
+  const emitBlogs = () => {
+    if (!onBlogs || !cachedFlagKnown || !blogsReady) return;
+    const seeded = cachedFlagExists || cachedBlogDocs.length > 0;
+    onBlogs(cachedBlogDocs, seeded);
+  };
+
+  if (onBlogs) {
+    getDoc(doc(db, 'systemFlags', 'blogsSeeded'))
+      .then((snap) => {
+        cachedFlagExists = snap.exists();
+        cachedFlagKnown = true;
+        emitBlogs();
+      })
+      .catch(() => {
+        cachedFlagExists = false;
+        cachedFlagKnown = true;
+        emitBlogs();
+      });
+  }
 
   const unsubVehicles = onSnapshot(
     collection(db, 'vehicles'),
@@ -248,9 +367,27 @@ export function subscribePublicCatalog(
     },
   );
 
+  const unsubBlogs = onBlogs
+    ? onSnapshot(
+        collection(db, 'blogs'),
+        (snapshot) => {
+          blogsReady = true;
+          cachedBlogDocs = snapshot.docs
+            .map((d) => docToBlog(d.data() as Record<string, unknown>, d.id))
+            .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+          emitBlogs();
+          markReady();
+        },
+        (error) => {
+          handleFirestoreError(error, OperationType.GET, 'blogs');
+        },
+      )
+    : () => {};
+
   return () => {
     unsubVehicles();
     unsubVideos();
+    unsubBlogs();
   };
 }
 
@@ -861,6 +998,146 @@ export async function deletePortalUserRecord(id: string): Promise<void> {
   const path = `portalUsers/${id}`;
   try {
     await deleteDoc(doc(db, 'portalUsers', id));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, path);
+  }
+}
+
+async function markBlogsSeededFlag(): Promise<void> {
+  try {
+    const flagRef = doc(db, 'systemFlags', 'blogsSeeded');
+    const existingFlag = await getDoc(flagRef);
+    if (!existingFlag.exists()) {
+      await setDoc(flagRef, {
+        id: 'blogsSeeded',
+        initialized: true,
+        createdAt: serverTimestamp(),
+      });
+    }
+  } catch {
+    // Non-fatal if flag already initialized
+  }
+}
+
+export async function seedStarterBlogsOnce(user: PortalUser): Promise<void> {
+  const canManageBlogs =
+    Boolean(user.isPrimaryOwner) ||
+    user.permissions.inventoryWrite ||
+    user.permissions.videosManage ||
+    user.permissions.usersManage;
+
+  if (!canManageBlogs) return;
+
+  try {
+    const flagRef = doc(db, 'systemFlags', 'blogsSeeded');
+    const flagSnap = await getDoc(flagRef);
+    if (flagSnap.exists()) return;
+
+    const existingBlogs = await getDocs(collection(db, 'blogs'));
+    const batch = writeBatch(db);
+    if (existingBlogs.empty) {
+      for (const post of INITIAL_BLOG_POSTS) {
+        const cleanId = post.id.replace(/[^a-zA-Z0-9_-]/g, '-');
+        const { id: _id, createdAt: _createdAt, updatedAt: _updatedAt, ...rest } = post;
+        batch.set(doc(db, 'blogs', cleanId), buildBlogDocPayload(cleanId, rest, 'create'));
+      }
+    }
+    batch.set(flagRef, {
+      id: 'blogsSeeded',
+      initialized: true,
+      createdAt: serverTimestamp(),
+    });
+    await batch.commit();
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, 'blogs');
+  }
+}
+
+export async function createBlogRecord(
+  input: Omit<BlogPost, 'id' | 'createdAt'>,
+): Promise<BlogPost> {
+  const id = makeDocId('blog');
+  const payload = buildBlogDocPayload(id, input, 'create');
+  const path = `blogs/${id}`;
+
+  try {
+    await setDoc(doc(db, 'blogs', id), payload);
+    await markBlogsSeededFlag();
+    return {
+      ...(input as BlogPost),
+      id,
+      slug: payload.slug as string,
+      title: payload.title as string,
+      excerpt: payload.excerpt as string,
+      content: payload.content as string,
+      authorName: payload.authorName as string,
+      readTimeMinutes: payload.readTimeMinutes as number,
+      coverImage: payload.coverImage as string,
+      coverImageAlt: payload.coverImageAlt as string,
+      status: payload.status as BlogStatus,
+      createdAt: new Date().toISOString(),
+    };
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, path);
+  }
+}
+
+export async function updateBlogRecord(
+  id: string,
+  updates: Partial<BlogPost>,
+  currentPost?: BlogPost,
+): Promise<BlogPost | null> {
+  const path = `blogs/${id}`;
+  try {
+    const ref = doc(db, 'blogs', id);
+    let existing = currentPost;
+    if (!existing) {
+      const snap = await getDoc(ref);
+      if (!snap.exists()) return null;
+      existing = docToBlog(snap.data() as Record<string, unknown>, snap.id);
+    }
+
+    const merged: Omit<BlogPost, 'id' | 'createdAt'> = {
+      slug: updates.slug ?? existing.slug,
+      title: updates.title ?? existing.title,
+      excerpt: updates.excerpt ?? existing.excerpt,
+      content: updates.content ?? existing.content,
+      category: updates.category ?? existing.category,
+      authorName: updates.authorName ?? existing.authorName,
+      readTimeMinutes: updates.readTimeMinutes ?? existing.readTimeMinutes,
+      coverImage: updates.coverImage ?? existing.coverImage,
+      coverImageAlt: updates.coverImageAlt ?? existing.coverImageAlt,
+      status: updates.status ?? existing.status,
+    };
+
+    const payload = buildBlogDocPayload(id, merged, 'update');
+    await updateDoc(ref, payload);
+
+    return {
+      ...existing,
+      ...merged,
+      id,
+      slug: payload.slug as string,
+      title: payload.title as string,
+      excerpt: payload.excerpt as string,
+      content: payload.content as string,
+      authorName: payload.authorName as string,
+      readTimeMinutes: payload.readTimeMinutes as number,
+      coverImage: payload.coverImage as string,
+      coverImageAlt: payload.coverImageAlt as string,
+      status: payload.status as BlogStatus,
+      updatedAt: new Date().toISOString(),
+    };
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+  }
+}
+
+export async function deleteBlogRecord(id: string): Promise<void> {
+  const path = `blogs/${id}`;
+  try {
+    await markBlogsSeededFlag();
+    await deleteDoc(doc(db, 'blogs', id));
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, path);
   }

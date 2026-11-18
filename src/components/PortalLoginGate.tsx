@@ -96,16 +96,21 @@ export function PortalLoginGate({
           </div>
 
           <div className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl p-6 sm:p-8 shadow-xs space-y-6">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 flex items-center justify-center text-blue-900 dark:text-blue-400 shrink-0">
-                <Lock className="w-5 h-5" aria-hidden="true" />
+            <div className="flex items-center gap-3.5">
+              <div className="w-12 h-12 rounded-xl bg-slate-50 dark:bg-white border border-slate-200 dark:border-zinc-200 p-1 flex items-center justify-center shrink-0">
+                <img
+                  src="/assets/aistudio/PJS_Ventures_-_Transparent__White_Theme__3ad2a367.png"
+                  alt="PJS Ventures"
+                  className="w-full h-full object-contain"
+                />
               </div>
               <div>
                 <h1 className="font-display text-xl font-semibold text-zinc-950 dark:text-white">
                   PJS Ventures Seller Portal
                 </h1>
-                <p className="text-xs text-slate-500 dark:text-zinc-400">
-                  Authorized team &amp; owner access only
+                <p className="text-xs text-slate-500 dark:text-zinc-400 flex items-center gap-1.5 mt-0.5">
+                  <Lock className="w-3 h-3 shrink-0" aria-hidden="true" />
+                  <span>Authorized team &amp; owner access only</span>
                 </p>
               </div>
             </div>

@@ -1,5 +1,7 @@
 import { onAuthStateChanged } from 'firebase/auth';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { BlogListPage } from './components/BlogListPage';
+import { BlogPostPage } from './components/BlogPostPage';
 import { CifCalculatorSection, type LockedCifQuote } from './components/CifCalculatorSection';
 import { Footer } from './components/Footer';
 import { GlobalMarketsPage } from './components/GlobalMarketsPage';
@@ -11,16 +13,20 @@ import { Navbar, type AppRoute } from './components/Navbar';
 import { PortDealsPage } from './components/PortDealsPage';
 import { PortsPage } from './components/PortsPage';
 import { SellerPortal } from './components/SellerPortal';
+import { TradeChatbot } from './components/TradeChatbot';
 import { VehicleDetailPage } from './components/VehicleDetailPage';
+import { INITIAL_BLOG_POSTS } from './data/seedBlogs.ts';
 import { formatAutoPrice } from './data/seedInventory.ts';
 import { auth } from './lib/firebase.ts';
 import { signOutPortal } from './lib/portalAuth.ts';
 import { INITIAL_PORTAL_USERS } from './lib/portalRoles.ts';
 import {
+  createBlogRecord,
   createBookingRecord,
   createPortalUserRecord,
   createVehicleRecord,
   createVideoRecord,
+  deleteBlogRecord,
   deleteBookingRecord,
   deletePortalUserRecord,
   deleteVehicleRecord,
@@ -28,7 +34,9 @@ import {
   loadPortalPrivateData,
   resolveAuthorizedPortalUser,
   seedInitialCatalogIfEmpty,
+  seedStarterBlogsOnce,
   subscribePublicCatalog,
+  updateBlogRecord,
   updateBookingRecord,
   updatePortalUserRecord,
   updateVehicleRecord,
@@ -36,6 +44,7 @@ import {
 } from './lib/storeClient.ts';
 import type {
   AutoCurrency,
+  BlogPost,
   BookingRequest,
   ExportVehicle,
   GlobalPortRegion,
@@ -52,6 +61,7 @@ const STATIC_ROUTES: AppRoute[] = [
   '/ports',
   '/calculator',
   '/how-to-buy',
+  '/blog',
   '/book',
   '/portal',
 ];
@@ -64,6 +74,7 @@ const ROUTE_TITLES: Record<string, string> = {
   '/ports': 'Global Destination Ports — PJS Ventures',
   '/calculator': 'Global Freight & CIF Landed Calculator — PJS Ventures',
   '/how-to-buy': 'How to Buy & Export Guide — PJS Ventures',
+  '/blog': 'Export Journal & Buyer Guides — PJS Ventures Blog',
   '/book': 'Book a Vehicle or Claim Port Balance — PJS Ventures',
   '/portal': 'Seller Portal — PJS Ventures',
 };
@@ -75,6 +86,9 @@ function resolveInitialRoute(): AppRoute {
   if (path.startsWith('/listing/') && path.length > '/listing/'.length) {
     return path as AppRoute;
   }
+  if (path.startsWith('/blog/') && path.length > '/blog/'.length) {
+    return path as AppRoute;
+  }
   return STATIC_ROUTES.includes(path as AppRoute) ? (path as AppRoute) : '/';
 }
 
@@ -83,6 +97,8 @@ export default function App() {
   const [vehicles, setVehicles] = useState<ExportVehicle[]>([]);
   const [bookings, setBookings] = useState<BookingRequest[]>([]);
   const [videos, setVideos] = useState<UnloadingVideo[]>([]);
+  const [cloudBlogs, setCloudBlogs] = useState<BlogPost[]>([]);
+  const [blogsSeededInCloud, setBlogsSeededInCloud] = useState<boolean>(false);
   const [portalUsers, setPortalUsers] = useState<PortalUser[]>(INITIAL_PORTAL_USERS);
   const [loading, setLoading] = useState<boolean>(true);
   const [activePortalUser, setActivePortalUser] = useState<PortalUser | null>(null);
@@ -99,11 +115,25 @@ export default function App() {
   const [calculatorPortId, setCalculatorPortId] = useState<string | undefined>(undefined);
   const [portsRegionFilter, setPortsRegionFilter] = useState<GlobalPortRegion | 'all'>('all');
 
+  const blogs = useMemo(() => {
+    if (cloudBlogs.length > 0 || blogsSeededInCloud) {
+      return cloudBlogs;
+    }
+    return INITIAL_BLOG_POSTS;
+  }, [cloudBlogs, blogsSeededInCloud]);
+
   const activeListingId = route.startsWith('/listing/')
     ? decodeURIComponent(route.replace('/listing/', ''))
     : null;
   const activeListingVehicle = activeListingId
     ? vehicles.find((v) => v.id === activeListingId)
+    : undefined;
+
+  const activeBlogSlug = route.startsWith('/blog/')
+    ? decodeURIComponent(route.replace('/blog/', ''))
+    : null;
+  const activeBlogPost = activeBlogSlug
+    ? blogs.find((b) => b.slug === activeBlogSlug || b.id === activeBlogSlug)
     : undefined;
 
   useEffect(() => {
@@ -113,8 +143,14 @@ export default function App() {
         : 'Vehicle Listing — PJS Ventures';
       return;
     }
+    if (activeBlogSlug) {
+      document.title = activeBlogPost
+        ? `${activeBlogPost.title} — PJS Ventures Blog`
+        : 'Article — PJS Ventures Blog';
+      return;
+    }
     document.title = ROUTE_TITLES[route] || 'PJS Ventures';
-  }, [route, activeListingId, activeListingVehicle]);
+  }, [route, activeListingId, activeListingVehicle, activeBlogSlug, activeBlogPost]);
 
   useEffect(() => {
     const onRouteChange = () => {
@@ -128,12 +164,16 @@ export default function App() {
     };
   }, []);
 
-  // Subscribe to public catalog (vehicles + unloading videos) in Cloud Firestore
+  // Subscribe to public catalog (vehicles + unloading videos + blogs) in Cloud Firestore
   useEffect(() => {
     const unsubscribe = subscribePublicCatalog(
       (nextVehicles) => setVehicles(nextVehicles),
       (nextVideos) => setVideos(nextVideos),
       () => setLoading(false),
+      (nextBlogs, isSeededInCloud) => {
+        setCloudBlogs(nextBlogs);
+        setBlogsSeededInCloud(isSeededInCloud);
+      },
     );
     return () => unsubscribe();
   }, []);
@@ -167,6 +207,7 @@ export default function App() {
         setAuthError(null);
         setActivePortalUser(resolution.user);
         await seedInitialCatalogIfEmpty(resolution.user, resolution.isFirstBootstrap);
+        await seedStarterBlogsOnce(resolution.user);
         const privateData = await loadPortalPrivateData(resolution.user);
         if (!cancelled) {
           setBookings(privateData.bookings);
@@ -205,6 +246,13 @@ export default function App() {
   const handleOpenVehiclePage = useCallback(
     (vehicle: ExportVehicle) => {
       navigate(`/listing/${encodeURIComponent(vehicle.id)}`);
+    },
+    [navigate],
+  );
+
+  const handleOpenBlogPost = useCallback(
+    (slug: string) => {
+      navigate(`/blog/${encodeURIComponent(slug)}`);
     },
     [navigate],
   );
@@ -337,6 +385,26 @@ export default function App() {
     setVideos((prev) => prev.filter((v) => v.id !== id));
   };
 
+  const handleCreateBlog = async (blogInput: Omit<BlogPost, 'id' | 'createdAt'>) => {
+    const created = await createBlogRecord(blogInput);
+    setBlogsSeededInCloud(true);
+    setCloudBlogs((prev) => (prev.some((b) => b.id === created.id) ? prev : [created, ...prev]));
+  };
+
+  const handleUpdateBlog = async (id: string, updates: Partial<BlogPost>) => {
+    const current = cloudBlogs.find((b) => b.id === id);
+    const updated = await updateBlogRecord(id, updates, current);
+    if (updated) {
+      setCloudBlogs((prev) => prev.map((b) => (b.id === id ? updated : b)));
+    }
+  };
+
+  const handleDeleteBlog = async (id: string) => {
+    await deleteBlogRecord(id);
+    setBlogsSeededInCloud(true);
+    setCloudBlogs((prev) => prev.filter((b) => b.id !== id));
+  };
+
   const handleCreateUser = async (userInput: Omit<PortalUser, 'id' | 'createdAt'>) => {
     const created = await createPortalUserRecord(userInput);
     setPortalUsers((prev) => [...prev, created]);
@@ -380,6 +448,7 @@ export default function App() {
         vehicles={vehicles}
         bookings={bookings}
         videos={videos}
+        blogs={blogs}
         users={portalUsers}
         onCreateVehicle={handleCreateVehicle}
         onUpdateVehicle={handleUpdateVehicle}
@@ -390,6 +459,10 @@ export default function App() {
         onDeleteBooking={handleDeleteBooking}
         onCreateVideo={handleCreateVideo}
         onDeleteVideo={handleDeleteVideo}
+        onCreateBlog={handleCreateBlog}
+        onUpdateBlog={handleUpdateBlog}
+        onDeleteBlog={handleDeleteBlog}
+        onViewBlogPost={handleOpenBlogPost}
         onCreateUser={handleCreateUser}
         onUpdateUser={handleUpdateUser}
         onDeleteUser={handleDeleteUser}
@@ -406,13 +479,14 @@ export default function App() {
         {route === '/' && (
           <HomePage
             vehicles={vehicles}
-            videos={videos}
+            blogs={blogs}
             currency={currency}
             shortlistIds={shortlistIds}
             onToggleShortlist={handleToggleShortlist}
             onInspectVehicle={handleOpenVehiclePage}
             onBookOrClaimVehicle={handleBookOrClaimVehicle}
             onNavigate={navigate}
+            onOpenBlogPost={handleOpenBlogPost}
             onSelectPortForInventory={handleSelectPortForInventory}
             onSubmitQuickLead={handleSubmitBooking}
           />
@@ -489,7 +563,27 @@ export default function App() {
         )}
 
         {route === '/how-to-buy' && (
-          <HowToBuyPage videos={videos} onNavigate={navigate} />
+          <HowToBuyPage onNavigate={navigate} />
+        )}
+
+        {route === '/blog' && (
+          <BlogListPage
+            posts={blogs}
+            loading={loading}
+            onOpenPost={handleOpenBlogPost}
+            onNavigate={navigate}
+          />
+        )}
+
+        {route.startsWith('/blog/') && (
+          <BlogPostPage
+            post={activeBlogPost}
+            allPosts={blogs}
+            loading={loading}
+            onBackToBlog={() => navigate('/blog')}
+            onOpenPost={handleOpenBlogPost}
+            onNavigate={navigate}
+          />
         )}
 
         {route === '/book' && (
@@ -503,6 +597,14 @@ export default function App() {
       </main>
 
       <Footer onNavigate={navigate} />
+
+      <TradeChatbot
+        vehicles={vehicles}
+        currency={currency}
+        onInspectVehicle={handleOpenVehiclePage}
+        onBookVehicle={handleBookOrClaimVehicle}
+        onNavigate={navigate}
+      />
     </div>
   );
 }
