@@ -205,13 +205,13 @@ export function BlogPostPage({
           <button
             type="button"
             onClick={onBackToBlog}
-            className="inline-flex items-center gap-2 text-xs sm:text-sm font-medium text-slate-700 hover:text-blue-900 transition-colors cursor-pointer"
+            className="inline-flex items-center gap-2 text-xs sm:text-sm font-medium text-slate-700 hover:text-[#C81E1E] transition-colors cursor-pointer"
           >
             <ArrowLeft className="w-4 h-4" aria-hidden="true" />
             <span>Back to All Blog Articles</span>
           </button>
 
-          <div className="text-xs font-medium text-blue-900">{post.category}</div>
+          <div className="text-xs font-medium text-[#C81E1E]">{post.category}</div>
         </div>
       </div>
 
@@ -219,7 +219,7 @@ export function BlogPostPage({
       <header className="pt-10 pb-8 sm:pt-14 sm:pb-10">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-slate-500 mb-4">
-            <span className="font-medium text-blue-900">{post.category}</span>
+            <span className="font-medium text-[#C81E1E]">{post.category}</span>
             <span aria-hidden="true">·</span>
             <span className="inline-flex items-center gap-1.5">
               <User className="w-3.5 h-3.5" aria-hidden="true" />
@@ -403,7 +403,7 @@ export function BlogPostPage({
                 <button
                   type="button"
                   onClick={() => onNavigate('/inventory')}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-white bg-blue-900 hover:bg-blue-950 rounded-lg transition-colors cursor-pointer"
+                  className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-[#C81E1E] hover:bg-[#A51616] rounded-lg transition-colors cursor-pointer"
                 >
                   <span>Browse Vehicles</span>
                   <ArrowRight className="w-4 h-4" aria-hidden="true" />

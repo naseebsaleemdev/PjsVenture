@@ -5,13 +5,18 @@
   --font-display: "Outfit", ui-sans-serif, system-ui, sans-serif;
   --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --color-navy-950: #07162b;
+  --color-navy-900: #0b1f3a;
+  --color-navy-800: #12315b;
+  --color-crimson-700: #a51616;
+  --color-crimson-600: #c81e1e;
 }
 
 @layer base {
   html {
     font-family: var(--font-sans);
-    color: #09090b;
-    background-color: #f8fafc;
+    color: #0f172a;
+    background-color: #f3f5f8;
   }
 
   h1,

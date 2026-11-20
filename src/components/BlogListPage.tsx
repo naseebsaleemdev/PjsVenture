@@ -70,7 +70,7 @@ export function BlogListPage({ posts, loading, onOpenPost, onNavigate }: BlogLis
         subtitle="Practical field guides on reading Japanese auction sheets, choosing RoRo or container shipping, and claiming in-transit port balance-release vehicles."
       />
 
-      <section className="py-12 sm:py-16 bg-slate-50 border-b border-slate-200">
+      <section className="py-12 sm:py-16 bg-[#F3F5F8] border-b border-slate-200">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 space-y-10">
           {/* Category Filter + Search Bar */}
           <div className="bg-white border border-slate-200 rounded-xl p-4 sm:p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
@@ -84,8 +84,8 @@ export function BlogListPage({ posts, loading, onOpenPost, onNavigate }: BlogLis
                     onClick={() => setSelectedCategory(category)}
                     className={`px-3.5 py-2 text-xs sm:text-sm font-medium rounded-lg border transition-colors cursor-pointer whitespace-nowrap ${
                       active
-                        ? 'border-blue-900 bg-blue-900 text-white'
-                        : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-300 hover:text-zinc-950'
+                        ? 'border-[#0B1F3A] bg-[#0B1F3A] text-white'
+                        : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-300 hover:text-[#0B1F3A]'
                     }`}
                   >
                     {category}
@@ -181,7 +181,7 @@ export function BlogListPage({ posts, loading, onOpenPost, onNavigate }: BlogLis
                   </div>
                   <div className="lg:col-span-5 p-6 sm:p-8 flex flex-col justify-between">
                     <div>
-                      <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs font-medium text-blue-900">
+                      <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs font-medium text-[#C81E1E]">
                         <span>Featured Guide</span>
                         <span aria-hidden="true" className="text-slate-300">
                           ·
@@ -189,7 +189,7 @@ export function BlogListPage({ posts, loading, onOpenPost, onNavigate }: BlogLis
                         <span>{featuredPost.category}</span>
                       </div>
 
-                      <h2 className="mt-3 font-display text-2xl sm:text-3xl font-semibold tracking-tight text-zinc-950 group-hover:text-blue-900 transition-colors leading-snug">
+                      <h2 className="mt-3 font-display text-2xl sm:text-3xl font-semibold tracking-tight text-zinc-950 group-hover:text-[#C81E1E] transition-colors leading-snug">
                         {featuredPost.title}
                       </h2>
 
@@ -211,7 +211,7 @@ export function BlogListPage({ posts, loading, onOpenPost, onNavigate }: BlogLis
                         </span>
                       </div>
 
-                      <span className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-900 whitespace-nowrap shrink-0">
+                      <span className="inline-flex items-center gap-1.5 text-sm font-medium text-[#C81E1E] whitespace-nowrap shrink-0">
                         <span>Read Article</span>
                         <ArrowRight className="w-4 h-4" aria-hidden="true" />
                       </span>
@@ -241,14 +241,14 @@ export function BlogListPage({ posts, loading, onOpenPost, onNavigate }: BlogLis
 
                         <div className="p-5 sm:p-6">
                           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
-                            <span className="font-medium text-blue-900">{post.category}</span>
+                            <span className="font-medium text-[#C81E1E]">{post.category}</span>
                             <span aria-hidden="true">·</span>
                             <span>{formatArticleDate(post.createdAt)}</span>
                             <span aria-hidden="true">·</span>
                             <span className="tabular-nums">{post.readTimeMinutes} min</span>
                           </div>
 
-                          <h3 className="mt-2.5 font-display text-lg font-semibold text-zinc-950 group-hover:text-blue-900 transition-colors leading-snug">
+                          <h3 className="mt-2.5 font-display text-lg font-semibold text-zinc-950 group-hover:text-[#C81E1E] transition-colors leading-snug">
                             {post.title}
                           </h3>
 
@@ -260,7 +260,7 @@ export function BlogListPage({ posts, loading, onOpenPost, onNavigate }: BlogLis
 
                       <div className="px-5 sm:px-6 py-4 border-t border-slate-100 bg-slate-50/60 flex items-center justify-between gap-3">
                         <span className="text-xs text-slate-500 truncate">{post.authorName}</span>
-                        <span className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-900 shrink-0">
+                        <span className="inline-flex items-center gap-1.5 text-xs font-medium text-[#C81E1E] shrink-0">
                           <span>Read Full Post</span>
                           <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
                         </span>

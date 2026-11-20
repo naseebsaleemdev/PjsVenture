@@ -156,17 +156,17 @@ export function GlobalMarketsPage({
             <div className="text-xs text-slate-600 mt-0.5">Japan · UAE · USA · Thailand Yards</div>
           </div>
           <div>
-            <div className="font-mono text-2xl font-semibold text-blue-900 tabular-nums">RHD &amp; LHD</div>
+            <div className="font-mono text-2xl font-semibold text-[#C81E1E] tabular-nums">RHD &amp; LHD</div>
             <div className="text-xs text-slate-600 mt-0.5">Country-Specific Compliance</div>
           </div>
         </div>
       </section>
 
       {/* Regional Corridors */}
-      <section className="py-16 bg-slate-50">
+      <section className="py-16 bg-[#F3F5F8]">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-2xl mb-10">
-            <p className="text-xs font-medium text-blue-900 mb-2">Active Trade Corridors</p>
+            <p className="text-xs font-medium text-[#C81E1E] mb-2">Active Trade Corridors</p>
             <h2 className="font-display text-2xl sm:text-3xl font-semibold tracking-tight text-zinc-950">
               Select your destination region for freight rates, inspection rules, and live inventory.
             </h2>
@@ -180,7 +180,7 @@ export function GlobalMarketsPage({
               >
                 <div>
                   <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500 mb-2">
-                    <span className="inline-flex items-center gap-1.5 font-medium text-blue-900">
+                    <span className="inline-flex items-center gap-1.5 font-medium text-[#C81E1E]">
                       <Globe className="w-3.5 h-3.5" aria-hidden="true" />
                       {corridor.regionKey}
                     </span>
@@ -223,7 +223,7 @@ export function GlobalMarketsPage({
                         className="flex items-start gap-2 text-xs text-slate-600 leading-relaxed"
                       >
                         <CheckCircle2
-                          className="w-3.5 h-3.5 text-blue-900 shrink-0 mt-0.5"
+                          className="w-3.5 h-3.5 text-[#C81E1E] shrink-0 mt-0.5"
                           aria-hidden="true"
                         />
                         <span>{item}</span>
@@ -259,7 +259,7 @@ export function GlobalMarketsPage({
                       onSelectPortForCalculator(corridor.anchorPortId);
                       onNavigate('/calculator');
                     }}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium text-white bg-blue-900 hover:bg-blue-950 rounded-lg transition-colors cursor-pointer"
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-[#C81E1E] hover:bg-[#A51616] rounded-lg transition-colors cursor-pointer"
                   >
                     <span>Calculate CIF</span>
                     <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />

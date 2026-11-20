@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Bookmark, Search, X } from 'lucide-react';
+import { Bookmark, LayoutGrid, List, Search, X } from 'lucide-react';
 import { DESTINATION_PORTS, PORT_REGIONS, formatAutoPrice } from '../data/seedInventory.ts';
 import type { AutoCurrency, ExportVehicle, VehicleCategory } from '../types/autoTrade.ts';
 import { PageBanner } from './PageBanner';
 import { ResilientImage } from './ResilientImage';
 import { VehicleCard } from './VehicleCard';
 
-type ListingTab = 'All Vehicles' | 'Book from Japan' | 'Port Balance Deals';
+export type ListingTab = 'All Vehicles' | 'Book from Japan' | 'Port Balance Deals';
 type SortOption = 'newest' | 'price-asc' | 'price-desc' | 'mileage-asc' | 'balance-first';
+type ViewMode = 'grid' | 'table';
 
 const LISTING_TABS: ListingTab[] = ['All Vehicles', 'Book from Japan', 'Port Balance Deals'];
 
@@ -32,6 +33,9 @@ interface InventorySectionProps {
   onBookOrClaimVehicle: (vehicle: ExportVehicle) => void;
   onRequestShortlistQuote: () => void;
   initialPortId?: string;
+  initialCategory?: VehicleCategory;
+  initialListingTab?: ListingTab;
+  initialSearchQuery?: string;
 }
 
 export function InventorySection({
@@ -45,17 +49,33 @@ export function InventorySection({
   onBookOrClaimVehicle,
   onRequestShortlistQuote,
   initialPortId = 'all',
+  initialCategory = 'All Stock',
+  initialListingTab = 'All Vehicles',
+  initialSearchQuery = '',
 }: InventorySectionProps) {
-  const [listingTab, setListingTab] = useState<ListingTab>('All Vehicles');
-  const [activeCategory, setActiveCategory] = useState<VehicleCategory>('All Stock');
+  const [listingTab, setListingTab] = useState<ListingTab>(initialListingTab);
+  const [activeCategory, setActiveCategory] = useState<VehicleCategory>(initialCategory);
   const [selectedPortId, setSelectedPortId] = useState<string>(initialPortId);
   const [sortBy, setSortBy] = useState<SortOption>('newest');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState(initialSearchQuery);
+  const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   useEffect(() => {
     setSelectedPortId(initialPortId);
   }, [initialPortId]);
+
+  useEffect(() => {
+    setActiveCategory(initialCategory);
+  }, [initialCategory]);
+
+  useEffect(() => {
+    setListingTab(initialListingTab);
+  }, [initialListingTab]);
+
+  useEffect(() => {
+    setSearchQuery(initialSearchQuery);
+  }, [initialSearchQuery]);
 
   const filteredVehicles = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -106,19 +126,27 @@ export function InventorySection({
     0,
   );
 
+  const resetAllFilters = () => {
+    setListingTab('All Vehicles');
+    setActiveCategory('All Stock');
+    setSelectedPortId('all');
+    setSortBy('newest');
+    setSearchQuery('');
+  };
+
   return (
     <div>
       <PageBanner
-        breadcrumb="PJS Ventures · Global Export Inventory"
+        breadcrumb="PJS Ventures · Global Export Stock List"
         title="Japanese & International Vehicles Ready for Export"
         subtitle="Book verified yard units for direct RoRo or container dispatch to Caribbean, African, UK, European, Asian, or Pacific ports—or filter for select in-transit balance-release deals."
       />
 
-      <section className="py-12 sm:py-16 bg-slate-50">
+      <section className="py-10 sm:py-14 bg-[#F3F5F8]">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          {/* Unified Filter Toolbar */}
-          <div className="bg-white border border-slate-200 rounded-xl p-4 sm:p-5 mb-8 space-y-4">
-            {/* Row 1: Deal Type Tabs, Currency & Saved Shortlist */}
+          {/* Exporter Search & Filter Console */}
+          <div className="bg-white border border-slate-200 rounded-xl p-4 sm:p-5 mb-8 space-y-4 shadow-xs">
+            {/* Row 1: Deal Type Tabs, Currency, View Mode & Shortlist */}
             <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-100">
               <div
                 role="tablist"
@@ -136,8 +164,8 @@ export function InventorySection({
                       onClick={() => setListingTab(tab)}
                       className={`px-3.5 py-2 text-xs sm:text-sm font-medium rounded-md transition-colors duration-150 whitespace-nowrap cursor-pointer ${
                         active
-                          ? 'bg-white text-zinc-950 shadow-xs'
-                          : 'text-slate-600 hover:text-zinc-950'
+                          ? 'bg-[#0B1F3A] text-white shadow-xs'
+                          : 'text-slate-600 hover:text-[#0B1F3A]'
                       }`}
                     >
                       {tab}
@@ -159,10 +187,10 @@ export function InventorySection({
                         key={code}
                         type="button"
                         onClick={() => onCurrencyChange(code)}
-                        className={`px-2.5 sm:px-3 py-1.5 text-xs font-medium rounded-md transition-colors duration-150 whitespace-nowrap shrink-0 cursor-pointer ${
+                        className={`px-2.5 sm:px-3 py-1.5 text-xs font-semibold rounded-md transition-colors duration-150 whitespace-nowrap shrink-0 cursor-pointer ${
                           active
-                            ? 'bg-zinc-950 text-white'
-                            : 'text-slate-600 hover:text-zinc-950'
+                            ? 'bg-[#0B1F3A] text-white'
+                            : 'text-slate-600 hover:text-[#0B1F3A]'
                         }`}
                       >
                         {code}
@@ -171,12 +199,46 @@ export function InventorySection({
                   })}
                 </div>
 
+                {/* Grid vs Exporter Table Toggle */}
+                <div
+                  role="group"
+                  aria-label="Stock display layout"
+                  className="inline-flex items-center gap-1 p-1 bg-slate-50 border border-slate-200 rounded-lg"
+                >
+                  <button
+                    type="button"
+                    onClick={() => setViewMode('grid')}
+                    aria-pressed={viewMode === 'grid'}
+                    title="Card grid view"
+                    className={`p-1.5 rounded-md transition-colors cursor-pointer ${
+                      viewMode === 'grid'
+                        ? 'bg-[#0B1F3A] text-white'
+                        : 'text-slate-500 hover:text-[#0B1F3A]'
+                    }`}
+                  >
+                    <LayoutGrid className="w-4 h-4" aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setViewMode('table')}
+                    aria-pressed={viewMode === 'table'}
+                    title="Compact exporter stock table"
+                    className={`p-1.5 rounded-md transition-colors cursor-pointer ${
+                      viewMode === 'table'
+                        ? 'bg-[#0B1F3A] text-white'
+                        : 'text-slate-500 hover:text-[#0B1F3A]'
+                    }`}
+                  >
+                    <List className="w-4 h-4" aria-hidden="true" />
+                  </button>
+                </div>
+
                 <button
                   type="button"
                   onClick={() => setDrawerOpen(true)}
-                  className="inline-flex items-center gap-2 px-3.5 py-2 text-xs sm:text-sm font-medium rounded-lg border border-slate-200 bg-white text-zinc-950 hover:border-slate-300 transition-colors duration-150 whitespace-nowrap shrink-0 cursor-pointer"
+                  className="inline-flex items-center gap-2 px-3.5 py-2 text-xs sm:text-sm font-medium rounded-lg border border-slate-200 bg-white text-[#0B1F3A] hover:border-[#0B1F3A] transition-colors duration-150 whitespace-nowrap shrink-0 cursor-pointer"
                 >
-                  <Bookmark className="w-4 h-4 text-blue-900" aria-hidden="true" />
+                  <Bookmark className="w-4 h-4 text-[#C81E1E]" aria-hidden="true" />
                   <span>Saved</span>
                   <span className="font-mono tabular-nums text-slate-600">
                     ({shortlistIds.length})
@@ -198,14 +260,14 @@ export function InventorySection({
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search make, model, chassis code, or year..."
                   aria-label="Search vehicle inventory"
-                  className="w-full pl-10 pr-9 py-2.5 text-sm rounded-lg border border-slate-200 bg-slate-50/70 text-zinc-950 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-900/15 focus:border-blue-900"
+                  className="w-full pl-10 pr-9 py-2.5 text-sm rounded-lg border border-slate-200 bg-slate-50/70 text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0B1F3A]/15 focus:border-[#0B1F3A]"
                 />
                 {searchQuery && (
                   <button
                     type="button"
                     onClick={() => setSearchQuery('')}
                     aria-label="Clear search"
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-zinc-950 cursor-pointer"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-900 cursor-pointer"
                   >
                     <X className="w-3.5 h-3.5" />
                   </button>
@@ -217,7 +279,7 @@ export function InventorySection({
                   aria-label="Filter by destination port"
                   value={selectedPortId}
                   onChange={(e) => setSelectedPortId(e.target.value)}
-                  className="w-full px-3.5 py-2.5 text-sm rounded-lg border border-slate-200 bg-slate-50/70 text-zinc-950 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-900/15 focus:border-blue-900 truncate cursor-pointer"
+                  className="w-full px-3.5 py-2.5 text-sm rounded-lg border border-slate-200 bg-slate-50/70 text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0B1F3A]/15 focus:border-[#0B1F3A] truncate cursor-pointer"
                 >
                   <option value="all">All Destination Ports</option>
                   {PORT_REGIONS.map((region) => (
@@ -237,7 +299,7 @@ export function InventorySection({
                   aria-label="Sort inventory"
                   value={sortBy}
                   onChange={(e) => setSortBy(e.target.value as SortOption)}
-                  className="w-full px-3.5 py-2.5 text-sm rounded-lg border border-slate-200 bg-slate-50/70 text-zinc-950 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-900/15 focus:border-blue-900 cursor-pointer"
+                  className="w-full px-3.5 py-2.5 text-sm rounded-lg border border-slate-200 bg-slate-50/70 text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0B1F3A]/15 focus:border-[#0B1F3A] cursor-pointer"
                 >
                   <option value="newest">Sort: Featured</option>
                   <option value="price-asc">Price: Low to High</option>
@@ -260,8 +322,8 @@ export function InventorySection({
                       onClick={() => setActiveCategory(category)}
                       className={`px-3.5 py-1.5 text-xs font-medium rounded-md border transition-colors duration-150 whitespace-nowrap cursor-pointer ${
                         active
-                          ? 'border-blue-900 bg-blue-900 text-white'
-                          : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-zinc-950'
+                          ? 'border-[#C81E1E] bg-[#C81E1E] text-white'
+                          : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-[#0B1F3A]'
                       }`}
                     >
                       {category}
@@ -273,7 +335,7 @@ export function InventorySection({
               <div className="flex items-center gap-3 text-xs text-slate-500">
                 <span>
                   Showing{' '}
-                  <span className="font-mono font-semibold text-zinc-950 tabular-nums">
+                  <span className="font-mono font-semibold text-[#0B1F3A] tabular-nums">
                     {filteredVehicles.length}
                   </span>{' '}
                   verified vehicle(s)
@@ -285,14 +347,8 @@ export function InventorySection({
                   sortBy !== 'newest') && (
                   <button
                     type="button"
-                    onClick={() => {
-                      setListingTab('All Vehicles');
-                      setActiveCategory('All Stock');
-                      setSelectedPortId('all');
-                      setSortBy('newest');
-                      setSearchQuery('');
-                    }}
-                    className="text-blue-900 hover:underline font-medium cursor-pointer"
+                    onClick={resetAllFilters}
+                    className="text-[#C81E1E] hover:underline font-medium cursor-pointer"
                   >
                     Reset filters
                   </button>
@@ -312,24 +368,142 @@ export function InventorySection({
             </div>
           ) : filteredVehicles.length === 0 ? (
             <div className="bg-white border border-slate-200 rounded-xl p-10 text-center">
-              <h3 className="font-display text-lg font-semibold text-zinc-950">
+              <h3 className="font-display text-lg font-semibold text-[#0B1F3A]">
                 No vehicles match this filter
               </h3>
               <p className="mt-2 text-sm text-slate-600 max-w-md mx-auto">
-                Reset filters or request a custom Japan auction import for your Caribbean port.
+                Reset filters or request a custom Japan auction import for your destination port.
               </p>
               <button
                 type="button"
-                onClick={() => {
-                  setListingTab('All Vehicles');
-                  setActiveCategory('All Stock');
-                  setSelectedPortId('all');
-                  setSearchQuery('');
-                }}
-                className="mt-5 px-4 py-2 text-sm font-medium text-white bg-blue-900 hover:bg-blue-950 rounded-lg transition-colors cursor-pointer"
+                onClick={resetAllFilters}
+                className="mt-5 px-5 py-2.5 text-sm font-semibold text-white bg-[#C81E1E] hover:bg-[#A51616] rounded-lg transition-colors cursor-pointer"
               >
                 Reset Stock Filters
               </button>
+            </div>
+          ) : viewMode === 'table' ? (
+            <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-xs">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="bg-[#0B1F3A] text-white uppercase tracking-wider text-[11px]">
+                      <th className="py-3 px-4 font-semibold">Vehicle &amp; Chassis</th>
+                      <th className="py-3 px-3 font-semibold">Year</th>
+                      <th className="py-3 px-3 font-semibold">Mileage</th>
+                      <th className="py-3 px-3 font-semibold">Engine / Drive</th>
+                      <th className="py-3 px-3 font-semibold">Grade</th>
+                      <th className="py-3 px-3 font-semibold">Port / Status</th>
+                      <th className="py-3 px-3 font-semibold text-right">Price ({currency})</th>
+                      <th className="py-3 px-4 font-semibold text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200">
+                    {filteredVehicles.map((vehicle) => {
+                      const isBalance = vehicle.transit.dealType === 'balance-release';
+                      return (
+                        <tr
+                          key={vehicle.id}
+                          className="hover:bg-slate-50/90 transition-colors"
+                        >
+                          <td className="py-3 px-4">
+                            <div className="flex items-center gap-3 min-w-[230px]">
+                              <button
+                                type="button"
+                                onClick={() => onInspectVehicle(vehicle)}
+                                className="w-20 aspect-[4/3] rounded overflow-hidden border border-slate-200 bg-slate-100 shrink-0 cursor-pointer"
+                              >
+                                <ResilientImage
+                                  src={vehicle.image}
+                                  alt={vehicle.imageAlt}
+                                  fallbackTitle={vehicle.makeModel}
+                                  className="w-full h-full object-cover"
+                                />
+                              </button>
+                              <div className="min-w-0">
+                                <button
+                                  type="button"
+                                  onClick={() => onInspectVehicle(vehicle)}
+                                  className="font-display text-sm font-bold text-[#0B1F3A] hover:text-[#C81E1E] text-left cursor-pointer"
+                                >
+                                  {vehicle.makeModel}
+                                </button>
+                                <div className="text-[11px] text-slate-500 truncate">
+                                  {vehicle.trim}
+                                </div>
+                                <div className="font-mono text-[11px] text-slate-600">
+                                  {vehicle.chassisCode}
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-3 px-3 font-mono font-semibold text-slate-900 tabular-nums">
+                            {vehicle.year}
+                          </td>
+                          <td className="py-3 px-3 font-mono text-slate-700 tabular-nums whitespace-nowrap">
+                            {vehicle.mileageKm.toLocaleString('en-US')} km
+                          </td>
+                          <td className="py-3 px-3 text-slate-700 whitespace-nowrap">
+                            {vehicle.engine} · {vehicle.drive} · {vehicle.steering}
+                          </td>
+                          <td className="py-3 px-3 font-mono font-semibold text-[#0B1F3A]">
+                            {vehicle.inspection.overallGrade}
+                          </td>
+                          <td className="py-3 px-3">
+                            <div className="font-medium text-slate-900">
+                              {vehicle.transit.destinationPortLabel}
+                            </div>
+                            <div
+                              className={`text-[11px] font-medium ${
+                                isBalance ? 'text-[#C81E1E]' : 'text-slate-500'
+                              }`}
+                            >
+                              {isBalance ? 'Port Balance Deal' : vehicle.status}
+                            </div>
+                          </td>
+                          <td className="py-3 px-3 text-right whitespace-nowrap">
+                            <div
+                              className={`font-mono text-sm font-bold tabular-nums ${
+                                isBalance ? 'text-[#C81E1E]' : 'text-[#0B1F3A]'
+                              }`}
+                            >
+                              {formatAutoPrice(
+                                isBalance
+                                  ? vehicle.transit.balanceDueUsd
+                                  : vehicle.transit.fullCifUsd,
+                                currency,
+                              )}
+                            </div>
+                            <div className="text-[11px] font-mono text-slate-500 tabular-nums">
+                              {isBalance
+                                ? 'Balance Due'
+                                : `FOB ${formatAutoPrice(vehicle.fobUsd, currency)}`}
+                            </div>
+                          </td>
+                          <td className="py-3 px-4 text-right whitespace-nowrap">
+                            <div className="inline-flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => onInspectVehicle(vehicle)}
+                                className="px-2.5 py-1.5 text-xs font-medium text-[#0B1F3A] bg-slate-100 hover:bg-slate-200 rounded cursor-pointer"
+                              >
+                                Inspect
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => onBookOrClaimVehicle(vehicle)}
+                                className="px-3 py-1.5 text-xs font-semibold text-white bg-[#C81E1E] hover:bg-[#A51616] rounded cursor-pointer"
+                              >
+                                {isBalance ? 'Claim' : 'Book'}
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
@@ -354,7 +528,7 @@ export function InventorySection({
           role="dialog"
           aria-modal="true"
           aria-label="Saved vehicles drawer"
-          className="fixed inset-0 z-50 flex justify-end bg-zinc-950/50 backdrop-blur-xs"
+          className="fixed inset-0 z-50 flex justify-end bg-slate-950/50 backdrop-blur-xs"
           onClick={() => setDrawerOpen(false)}
         >
           <div
@@ -363,7 +537,7 @@ export function InventorySection({
           >
             <div className="px-6 py-5 border-b border-slate-200 flex items-center justify-between">
               <div>
-                <h3 className="font-display text-lg font-semibold text-zinc-950">
+                <h3 className="font-display text-lg font-bold text-[#0B1F3A]">
                   Saved Vehicles
                 </h3>
                 <p className="text-xs text-slate-500">
@@ -374,7 +548,7 @@ export function InventorySection({
                 type="button"
                 onClick={() => setDrawerOpen(false)}
                 aria-label="Close saved drawer"
-                className="w-10 h-10 inline-flex items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:text-zinc-950 cursor-pointer"
+                className="w-10 h-10 inline-flex items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:text-[#0B1F3A] cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -383,8 +557,7 @@ export function InventorySection({
             <div className="flex-1 overflow-y-auto p-6 space-y-4">
               {shortlistedVehicles.length === 0 ? (
                 <div className="py-12 text-center text-sm text-slate-500">
-                  No vehicles saved yet. Bookmark any car to request a multi-unit Caribbean shipping
-                  quote.
+                  No vehicles saved yet. Bookmark any car to request a multi-unit CIF shipping quote.
                 </div>
               ) : (
                 shortlistedVehicles.map((item) => (
@@ -401,20 +574,20 @@ export function InventorySection({
                       />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="text-sm font-semibold text-zinc-950 truncate">
+                      <div className="text-sm font-semibold text-[#0B1F3A] truncate">
                         {item.year} {item.makeModel}
                       </div>
                       <div className="text-xs text-slate-500 truncate">
                         {item.transit.destinationPortLabel}
                       </div>
                       <div className="mt-1.5 flex items-center justify-between">
-                        <span className="font-mono text-sm font-semibold text-blue-900 tabular-nums">
+                        <span className="font-mono text-sm font-bold text-[#C81E1E] tabular-nums">
                           {formatAutoPrice(item.transit.balanceDueUsd, currency)}
                         </span>
                         <button
                           type="button"
                           onClick={() => onToggleShortlist(item.id)}
-                          className="text-xs text-slate-500 hover:text-red-700 cursor-pointer"
+                          className="text-xs text-slate-500 hover:text-[#C81E1E] cursor-pointer"
                         >
                           Remove
                         </button>
@@ -428,7 +601,7 @@ export function InventorySection({
             <div className="p-6 border-t border-slate-200 bg-slate-50 space-y-4">
               <div className="flex items-baseline justify-between">
                 <span className="text-sm text-slate-600">Combined CIF / Balance</span>
-                <span className="font-mono text-xl font-semibold text-zinc-950 tabular-nums">
+                <span className="font-mono text-xl font-bold text-[#0B1F3A] tabular-nums">
                   {formatAutoPrice(shortlistTotalUsd, currency)}
                 </span>
               </div>
@@ -439,7 +612,7 @@ export function InventorySection({
                   setDrawerOpen(false);
                   onRequestShortlistQuote();
                 }}
-                className="w-full px-5 py-3 text-sm font-medium text-white bg-blue-900 hover:bg-blue-950 disabled:bg-slate-300 disabled:cursor-not-allowed rounded-lg transition-colors cursor-pointer"
+                className="w-full px-5 py-3 text-sm font-semibold text-white bg-[#C81E1E] hover:bg-[#A51616] disabled:bg-slate-300 disabled:cursor-not-allowed rounded-lg transition-colors cursor-pointer"
               >
                 Book Shortlisted Vehicles
               </button>

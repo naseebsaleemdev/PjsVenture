@@ -26,7 +26,7 @@ export function PortTrackingProgress({
             className={`font-mono font-semibold ${
               isReady
                 ? 'text-emerald-800 dark:text-emerald-400'
-                : 'text-blue-900 dark:text-blue-400'
+                : 'text-[#0B1F3A] dark:text-blue-400'
             }`}
           >
             {activeStage}
@@ -45,7 +45,7 @@ export function PortTrackingProgress({
                   done
                     ? isReady
                       ? 'bg-emerald-700 dark:bg-emerald-500'
-                      : 'bg-blue-900 dark:bg-blue-500'
+                      : 'bg-[#0B1F3A] dark:bg-blue-500'
                     : 'bg-slate-200 dark:bg-zinc-700'
                 }`}
               />
@@ -88,7 +88,7 @@ export function PortTrackingProgress({
       <div className="w-full h-2 rounded-full bg-slate-200 dark:bg-zinc-800 overflow-hidden">
         <div
           className={`h-full transition-all duration-300 ${
-            isReady ? 'bg-emerald-700 dark:bg-emerald-500' : 'bg-blue-900 dark:bg-blue-500'
+            isReady ? 'bg-emerald-700 dark:bg-emerald-500' : 'bg-[#0B1F3A] dark:bg-blue-500'
           }`}
           style={{ width: `${progressPercent}%` }}
         />
@@ -107,7 +107,7 @@ export function PortTrackingProgress({
                     completed || current
                       ? isReady
                         ? 'bg-emerald-700 dark:bg-emerald-500 text-white'
-                        : 'bg-blue-900 dark:bg-blue-500 text-white'
+                        : 'bg-[#0B1F3A] dark:bg-blue-500 text-white'
                       : 'bg-white dark:bg-zinc-800 border border-slate-300 dark:border-zinc-700 text-slate-400 dark:text-zinc-500'
                   }`}
                 >

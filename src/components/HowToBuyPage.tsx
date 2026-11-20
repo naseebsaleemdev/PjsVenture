@@ -66,10 +66,10 @@ export function HowToBuyPage({ onNavigate }: HowToBuyPageProps) {
       <AuctionProcessSection />
 
       {/* Auction Sheet & Grade Legend */}
-      <section className="py-16 bg-slate-50 border-b border-slate-200">
+      <section className="py-16 bg-[#F3F5F8] border-b border-slate-200">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
           <div>
-            <p className="text-xs font-medium text-blue-900 mb-2">Auction Sheet Transparency</p>
+            <p className="text-xs font-medium text-[#0B1F3A] mb-2">Auction Sheet Transparency</p>
             <h2 className="font-display text-2xl sm:text-3xl font-semibold tracking-tight text-zinc-950">
               Understanding Japanese Auction Grades
             </h2>
@@ -85,7 +85,7 @@ export function HowToBuyPage({ onNavigate }: HowToBuyPageProps) {
                   className="bg-white border border-slate-200 rounded-xl p-5 flex flex-col justify-between"
                 >
                   <div>
-                    <div className="font-mono text-base font-semibold text-blue-900">
+                    <div className="font-mono text-base font-semibold text-[#0B1F3A]">
                       {item.grade}
                     </div>
                     <h3 className="font-display text-base font-semibold text-zinc-950 mt-1">
@@ -100,7 +100,7 @@ export function HowToBuyPage({ onNavigate }: HowToBuyPageProps) {
 
           {/* Pre-export certification grid */}
           <div>
-            <div className="flex items-center gap-2 text-xs font-medium text-blue-900 mb-2">
+            <div className="flex items-center gap-2 text-xs font-medium text-[#0B1F3A] mb-2">
               <ShieldCheck className="w-4 h-4" aria-hidden="true" />
               <span>Export Compliance &amp; Documentation</span>
             </div>
@@ -115,7 +115,7 @@ export function HowToBuyPage({ onNavigate }: HowToBuyPageProps) {
                   className="bg-white border border-slate-200 rounded-xl p-5 flex items-start gap-3.5"
                 >
                   <FileCheck2
-                    className="w-5 h-5 text-blue-900 shrink-0 mt-0.5"
+                    className="w-5 h-5 text-[#0B1F3A] shrink-0 mt-0.5"
                     aria-hidden="true"
                   />
                   <div>
@@ -160,7 +160,7 @@ export function HowToBuyPage({ onNavigate }: HowToBuyPageProps) {
             <button
               type="button"
               onClick={() => onNavigate('/inventory')}
-              className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-white bg-blue-900 hover:bg-blue-950 rounded-lg transition-colors cursor-pointer"
+              className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-[#C81E1E] hover:bg-[#A51616] rounded-lg transition-colors cursor-pointer"
             >
               <span>Browse Inventory</span>
               <ArrowRight className="w-4 h-4" aria-hidden="true" />

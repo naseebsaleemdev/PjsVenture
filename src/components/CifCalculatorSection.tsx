@@ -39,7 +39,7 @@ export function CifCalculatorSection({
         title="Calculate landed RO-RO freight & total vehicle cost by CBM."
         subtitle="Select any PJS Ventures unit or custom budget, pick your destination country across 190+ ports, and estimate RO-RO freight (Rate × CBM) or request container shipping."
       />
-      <section className="py-10 sm:py-14 bg-slate-50">
+      <section className="py-10 sm:py-14 bg-[#F3F5F8]">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <FreightCalculatorWidget
             vehicles={vehicles}

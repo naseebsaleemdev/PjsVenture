@@ -6,10 +6,11 @@ import type {
   BlogPost,
   BookingRequest,
   ExportVehicle,
+  VehicleCategory,
 } from '../types/autoTrade.ts';
 import { AuctionProcessSection } from './AuctionProcessSection';
 import { ExportShowcaseSection } from './ExportShowcaseSection';
-import { HeroSection } from './HeroSection';
+import { HeroSection, type QuickInventorySearch } from './HeroSection';
 import type { AppRoute } from './Navbar';
 import { ResilientImage } from './ResilientImage';
 import { VehicleCard } from './VehicleCard';
@@ -18,6 +19,7 @@ interface HomePageProps {
   vehicles: ExportVehicle[];
   blogs?: BlogPost[];
   currency: AutoCurrency;
+  onCurrencyChange: (currency: AutoCurrency) => void;
   shortlistIds: string[];
   onToggleShortlist: (vehicleId: string) => void;
   onInspectVehicle: (vehicle: ExportVehicle) => void;
@@ -25,6 +27,8 @@ interface HomePageProps {
   onNavigate: (route: AppRoute) => void;
   onOpenBlogPost?: (slug: string) => void;
   onSelectPortForInventory: (portId: string) => void;
+  onSelectCategoryForInventory: (category: VehicleCategory) => void;
+  onQuickSearchInventory: (filters: QuickInventorySearch) => void;
   onSubmitQuickLead: (payload: {
     vehicleId: string | null;
     vehicleTitle: string;
@@ -42,9 +46,19 @@ interface HomePageProps {
   }) => Promise<BookingRequest>;
 }
 
-const VEHICLE_CLASS_SHOWCASE = [
+const CURRENCIES: AutoCurrency[] = ['USD', 'BSD', 'XCD', 'GBP'];
+
+const VEHICLE_CLASS_SHOWCASE: {
+  title: string;
+  category: VehicleCategory;
+  subtitle: string;
+  detail: string;
+  image: string;
+  alt: string;
+}[] = [
   {
     title: '4x4 SUVs & Cruisers',
+    category: 'SUVs & 4x4',
     subtitle: 'Land Cruiser Prado, RAV4, Harrier & X-Trail',
     detail: 'Auction Grade 4.0–4.5 inspected units built for island and rugged terrain.',
     image: '/src/assets/images/auto_suv_prado_1794825333513.jpg',
@@ -52,22 +66,25 @@ const VEHICLE_CLASS_SHOWCASE = [
   },
   {
     title: 'Fuel-Efficient Hybrids',
+    category: 'Hybrids',
     subtitle: 'Toyota Aqua, Prius, Corolla & Fit e:HEV',
     detail: 'Low-emission daily commuters with verified hybrid battery health.',
     image: '/src/assets/images/auto_hybrid_aqua_1794825334004.jpg',
     alt: 'Compact metallic silver Japanese hybrid hatchback',
   },
   {
-    title: '4WD Work Pickups',
-    subtitle: 'Toyota Hilux Revo, D-Max & Triton 4x4',
+    title: '4WD Work Pickups & Vans',
+    category: 'Commercial',
+    subtitle: 'Toyota Hilux Revo, D-Max & HiAce Commuter',
     detail: 'Turbo-diesel commercial and crew-cab workhorses cleared for port dispatch.',
     image: '/src/assets/images/auto_pickup_hilux_1794825334855.jpg',
     alt: 'Japanese double-cab 4WD diesel pickup truck',
   },
   {
-    title: 'Executive Sedans & Vans',
-    subtitle: 'Toyota Crown, Mark X & HiAce Commuter',
-    detail: 'Clean Grade 4.5 executive sedans and multi-passenger fleet vans.',
+    title: 'Executive Sedans',
+    category: 'Sedans',
+    subtitle: 'Toyota Crown, Mark X & Premio Series',
+    detail: 'Clean Grade 4.5 executive sedans and diplomatic fleet sedans.',
     image: '/src/assets/images/auto_sedan_crown_1794825335274.jpg',
     alt: 'Japanese executive sedan in Yokohama inspection lot',
   },
@@ -77,6 +94,7 @@ export function HomePage({
   vehicles,
   blogs = [],
   currency,
+  onCurrencyChange,
   shortlistIds,
   onToggleShortlist,
   onInspectVehicle,
@@ -84,6 +102,8 @@ export function HomePage({
   onNavigate,
   onOpenBlogPost,
   onSelectPortForInventory,
+  onSelectCategoryForInventory,
+  onQuickSearchInventory,
   onSubmitQuickLead,
 }: HomePageProps) {
   const [leadName, setLeadName] = useState('');
@@ -149,29 +169,57 @@ export function HomePage({
   return (
     <>
       <HeroSection
+        totalVehiclesCount={vehicles.length}
         onBrowseInventory={() => onNavigate('/inventory')}
         onViewBalanceDeals={() => onNavigate('/port-deals')}
+        onQuickSearch={onQuickSearchInventory}
       />
 
-      {/* Featured Vehicles Preview */}
-      <section className="py-16 sm:py-20 bg-slate-50 border-b border-slate-200">
+      {/* Featured Vehicles Preview with Live Currency Bar */}
+      <section className="py-14 sm:py-18 bg-[#F3F5F8] border-b border-slate-200">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-10">
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-9">
             <div className="max-w-xl">
-              <p className="text-sm font-medium text-blue-900 mb-2">Featured Stock</p>
-              <h2 className="font-display text-3xl sm:text-4xl font-semibold tracking-tight text-zinc-950">
-                Book ready Japanese imports or claim select port-arrival units.
+              <div className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[#C81E1E] mb-2">
+                <span className="w-4 h-0.5 bg-[#C81E1E]" aria-hidden="true" />
+                <span>Featured Export Stock</span>
+              </div>
+              <h2 className="font-display text-3xl sm:text-4xl font-bold tracking-tight text-[#0B1F3A]">
+                Verified Japanese imports &amp; port-arrival units.
               </h2>
             </div>
 
-            <button
-              type="button"
-              onClick={() => onNavigate('/inventory')}
-              className="inline-flex items-center gap-2 text-sm font-medium text-blue-900 hover:text-blue-950 underline-offset-4 hover:underline cursor-pointer whitespace-nowrap shrink-0"
-            >
-              <span>View All {vehicles.length} Vehicles</span>
-              <ArrowRight className="w-4 h-4" aria-hidden="true" />
-            </button>
+            <div className="flex flex-wrap items-center gap-3">
+              <div
+                role="group"
+                aria-label="Select display currency"
+                className="inline-flex items-center gap-1 p-1 bg-white border border-slate-200 rounded-lg"
+              >
+                {CURRENCIES.map((code) => (
+                  <button
+                    key={code}
+                    type="button"
+                    onClick={() => onCurrencyChange(code)}
+                    className={`px-2.5 py-1 text-xs font-semibold rounded transition-colors cursor-pointer ${
+                      currency === code
+                        ? 'bg-[#0B1F3A] text-white'
+                        : 'text-slate-600 hover:text-[#0B1F3A]'
+                    }`}
+                  >
+                    {code}
+                  </button>
+                ))}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => onNavigate('/inventory')}
+                className="inline-flex items-center gap-2 px-4 py-2 text-xs sm:text-sm font-semibold text-white bg-[#0B1F3A] hover:bg-[#12315B] rounded-lg transition-colors cursor-pointer whitespace-nowrap shrink-0"
+              >
+                <span>View All {vehicles.length} Vehicles</span>
+                <ArrowRight className="w-4 h-4" aria-hidden="true" />
+              </button>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-8">
@@ -190,73 +238,144 @@ export function HomePage({
         </div>
       </section>
 
-      {/* Popular Vehicle Classes Photography Strip */}
+      {/* Browse by Body Category + Global Destination Ports Hub */}
       <section className="py-16 bg-white border-b border-slate-200">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-10">
-            <div className="max-w-xl">
-              <p className="text-sm font-medium text-blue-900 mb-2">Browse by Vehicle Class</p>
-              <h2 className="font-display text-2xl sm:text-3xl font-semibold tracking-tight text-zinc-950">
-                Auction-graded Japanese models ready for global export.
-              </h2>
-            </div>
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 space-y-14">
+          <div>
+            <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-8">
+              <div className="max-w-xl">
+                <div className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[#C81E1E] mb-2">
+                  <span className="w-4 h-0.5 bg-[#C81E1E]" aria-hidden="true" />
+                  <span>Search by Body Class</span>
+                </div>
+                <h2 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-[#0B1F3A]">
+                  Auction-graded Japanese categories ready for global export.
+                </h2>
+              </div>
 
-            <button
-              type="button"
-              onClick={() => onNavigate('/inventory')}
-              className="inline-flex items-center gap-2 text-sm font-medium text-blue-900 hover:text-blue-950 underline-offset-4 hover:underline cursor-pointer whitespace-nowrap shrink-0"
-            >
-              <span>Filter Full Catalog</span>
-              <ArrowRight className="w-4 h-4" aria-hidden="true" />
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {VEHICLE_CLASS_SHOWCASE.map((category) => (
               <button
-                key={category.title}
                 type="button"
                 onClick={() => onNavigate('/inventory')}
-                className="group text-left bg-slate-50 border border-slate-200 hover:border-blue-900 rounded-xl overflow-hidden transition-colors flex flex-col cursor-pointer"
+                className="inline-flex items-center gap-2 text-sm font-semibold text-[#0B1F3A] hover:text-[#C81E1E] underline-offset-4 hover:underline cursor-pointer whitespace-nowrap shrink-0"
               >
-                <div className="aspect-[4/3] w-full bg-slate-100 overflow-hidden">
-                  <ResilientImage
-                    src={category.image}
-                    alt={category.alt}
-                    fallbackTitle={category.title}
-                    className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-300"
-                  />
-                </div>
-                <div className="p-4 bg-white border-t border-slate-200 flex-1 flex flex-col justify-between">
-                  <div>
-                    <div className="text-[11px] font-medium text-blue-900 uppercase tracking-wide">
-                      {category.subtitle}
-                    </div>
-                    <h3 className="font-display text-base font-semibold text-zinc-950 mt-1">
-                      {category.title}
-                    </h3>
-                    <p className="mt-1.5 text-xs text-slate-600 leading-relaxed">
-                      {category.detail}
-                    </p>
-                  </div>
-                  <div className="mt-3 pt-3 border-t border-slate-100 inline-flex items-center gap-1.5 text-xs font-medium text-blue-900">
-                    <span>Explore Units</span>
-                    <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
-                  </div>
-                </div>
+                <span>Open Full Stock Sheet</span>
+                <ArrowRight className="w-4 h-4" aria-hidden="true" />
               </button>
-            ))}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              {VEHICLE_CLASS_SHOWCASE.map((item) => (
+                <button
+                  key={item.title}
+                  type="button"
+                  onClick={() => onSelectCategoryForInventory(item.category)}
+                  className="group text-left bg-white border border-slate-200 hover:border-[#0B1F3A] rounded-xl overflow-hidden transition-all hover:-translate-y-0.5 hover:shadow-md flex flex-col cursor-pointer"
+                >
+                  <div className="aspect-[4/3] w-full bg-slate-100 overflow-hidden">
+                    <ResilientImage
+                      src={item.image}
+                      alt={item.alt}
+                      fallbackTitle={item.title}
+                      className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-300"
+                    />
+                  </div>
+                  <div className="p-4 border-t border-slate-200 flex-1 flex flex-col justify-between">
+                    <div>
+                      <div className="text-[11px] font-semibold text-[#C81E1E] uppercase tracking-wide">
+                        {item.subtitle}
+                      </div>
+                      <h3 className="font-display text-base font-bold text-[#0B1F3A] mt-1">
+                        {item.title}
+                      </h3>
+                      <p className="mt-1.5 text-xs text-slate-600 leading-relaxed">{item.detail}</p>
+                    </div>
+                    <div className="mt-3 pt-3 border-t border-slate-100 inline-flex items-center gap-1.5 text-xs font-semibold text-[#0B1F3A] group-hover:text-[#C81E1E]">
+                      <span>Filter {item.category}</span>
+                      <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Worldwide Shipping Hubs */}
+          <div className="pt-12 border-t border-slate-200">
+            <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-8">
+              <div className="max-w-xl">
+                <div className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[#C81E1E] mb-2">
+                  <span className="w-4 h-0.5 bg-[#C81E1E]" aria-hidden="true" />
+                  <span>Global Maritime Corridors</span>
+                </div>
+                <h2 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-[#0B1F3A]">
+                  Direct sailings to Caribbean, Africa, UK &amp; Europe, Asia, and Oceania.
+                </h2>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-4">
+                <button
+                  type="button"
+                  onClick={() => onNavigate('/markets')}
+                  className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-700 hover:text-[#0B1F3A] underline-offset-4 hover:underline cursor-pointer whitespace-nowrap shrink-0"
+                >
+                  <span>Global Markets</span>
+                  <ArrowRight className="w-4 h-4" aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onNavigate('/ports')}
+                  className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#C81E1E] hover:underline underline-offset-4 cursor-pointer whitespace-nowrap shrink-0"
+                >
+                  <span>All {DESTINATION_PORTS.length} Global Ports &amp; Rates</span>
+                  <ArrowRight className="w-4 h-4" aria-hidden="true" />
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+              {featuredGlobalPorts.map((port) => (
+                <button
+                  key={port.id}
+                  type="button"
+                  onClick={() => {
+                    onSelectPortForInventory(port.id);
+                    onNavigate('/inventory');
+                  }}
+                  className="text-left p-5 rounded-xl border border-slate-200 bg-[#F8FAFC] hover:border-[#0B1F3A] hover:bg-white transition-all cursor-pointer flex flex-col justify-between"
+                >
+                  <div>
+                    <div className="text-xs font-semibold text-[#C81E1E]">
+                      {port.country} · {port.region}
+                    </div>
+                    <h3 className="font-display text-base font-bold text-[#0B1F3A] mt-1">
+                      {port.name}
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-1">{port.regionTag}</p>
+                  </div>
+
+                  <div className="mt-4 pt-3 border-t border-slate-200 flex items-baseline justify-between text-xs">
+                    <span className="text-slate-500">RoRo from</span>
+                    <span className="font-mono font-bold text-[#0B1F3A] tabular-nums">
+                      ${port.roroUsd.toLocaleString('en-US')}
+                    </span>
+                  </div>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </section>
 
-      {/* Two Clear Buying Options with Photography */}
-      <section className="py-16 bg-slate-50 border-b border-slate-200">
+      {/* Two Clear Buying Options */}
+      <section className="py-16 bg-[#F3F5F8] border-b border-slate-200">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-2xl mb-10">
-            <p className="text-sm font-medium text-blue-900 mb-2">How PJS Ventures Works</p>
-            <h2 className="font-display text-2xl sm:text-3xl font-semibold tracking-tight text-zinc-950">
-              Two straightforward ways to buy verified Japanese vehicles worldwide.
+            <div className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[#C81E1E] mb-2">
+              <span className="w-4 h-0.5 bg-[#C81E1E]" aria-hidden="true" />
+              <span>Two Ways to Buy</span>
+            </div>
+            <h2 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-[#0B1F3A]">
+              Book direct from Yokohama yards or claim in-transit port balance deals.
             </h2>
           </div>
 
@@ -272,11 +391,11 @@ export function HomePage({
                   />
                 </div>
                 <div className="p-6 sm:p-8">
-                  <div className="flex items-center gap-2 text-xs font-medium text-zinc-950 mb-3">
-                    <CheckCircle2 className="w-4 h-4 text-blue-900" aria-hidden="true" />
+                  <div className="flex items-center gap-2 text-xs font-semibold text-[#0B1F3A] mb-3">
+                    <CheckCircle2 className="w-4 h-4 text-[#0B1F3A]" aria-hidden="true" />
                     <span>Primary Service · Most Inventory</span>
                   </div>
-                  <h3 className="font-display text-xl font-semibold text-zinc-950">
+                  <h3 className="font-display text-xl font-bold text-[#0B1F3A]">
                     Book Direct Japan Imports
                   </h3>
                   <p className="mt-2.5 text-sm text-slate-600 leading-relaxed">
@@ -286,11 +405,11 @@ export function HomePage({
                   </p>
                 </div>
               </div>
-              <div className="px-6 sm:px-8 py-4 border-t border-slate-200 bg-slate-50/70">
+              <div className="px-6 sm:px-8 py-4 border-t border-slate-200 bg-slate-50/80">
                 <button
                   type="button"
                   onClick={() => onNavigate('/inventory')}
-                  className="inline-flex items-center gap-2 text-sm font-medium text-blue-900 hover:text-blue-950 cursor-pointer"
+                  className="inline-flex items-center gap-2 text-sm font-semibold text-[#0B1F3A] hover:text-[#C81E1E] cursor-pointer"
                 >
                   <span>Browse Direct Japan Stock</span>
                   <ArrowRight className="w-4 h-4" aria-hidden="true" />
@@ -298,9 +417,9 @@ export function HomePage({
               </div>
             </div>
 
-            <div className="border border-blue-200 rounded-xl overflow-hidden bg-white flex flex-col justify-between">
+            <div className="border border-slate-200 rounded-xl overflow-hidden bg-white flex flex-col justify-between">
               <div>
-                <div className="aspect-[16/10] w-full bg-slate-100 overflow-hidden border-b border-blue-200/80">
+                <div className="aspect-[16/10] w-full bg-slate-100 overflow-hidden border-b border-slate-200">
                   <ResilientImage
                     src="/src/assets/images/port_arrival_handover_1794999712812.jpg"
                     alt="Newly arrived Japanese SUV and 4WD pickup staged at coastal destination port"
@@ -309,11 +428,11 @@ export function HomePage({
                   />
                 </div>
                 <div className="p-6 sm:p-8">
-                  <div className="flex items-center gap-2 text-xs font-medium text-blue-900 mb-3">
-                    <Ship className="w-4 h-4 text-blue-900" aria-hidden="true" />
+                  <div className="flex items-center gap-2 text-xs font-semibold text-[#C81E1E] mb-3">
+                    <Ship className="w-4 h-4 text-[#C81E1E]" aria-hidden="true" />
                     <span>Select Units · Save Prior Buyer Deposit</span>
                   </div>
-                  <h3 className="font-display text-xl font-semibold text-zinc-950">
+                  <h3 className="font-display text-xl font-bold text-[#0B1F3A]">
                     Port Balance-Release Deals
                   </h3>
                   <p className="mt-2.5 text-sm text-slate-600 leading-relaxed">
@@ -323,11 +442,11 @@ export function HomePage({
                   </p>
                 </div>
               </div>
-              <div className="px-6 sm:px-8 py-4 border-t border-blue-200/70 bg-blue-50/40">
+              <div className="px-6 sm:px-8 py-4 border-t border-slate-200 bg-red-50/40">
                 <button
                   type="button"
                   onClick={() => onNavigate('/port-deals')}
-                  className="inline-flex items-center gap-2 text-sm font-medium text-blue-900 hover:text-blue-950 cursor-pointer"
+                  className="inline-flex items-center gap-2 text-sm font-semibold text-[#C81E1E] hover:underline cursor-pointer"
                 >
                   <span>View Current Port Balance Deals</span>
                   <ArrowRight className="w-4 h-4" aria-hidden="true" />
@@ -338,86 +457,21 @@ export function HomePage({
         </div>
       </section>
 
-      {/* Worldwide Export Corridors Preview */}
-      <section className="py-16 sm:py-20 bg-white border-b border-slate-200">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-10">
-            <div className="max-w-xl">
-              <p className="text-sm font-medium text-blue-900 mb-2">
-                Global Shipping Corridors
-              </p>
-              <h2 className="font-display text-2xl sm:text-3xl font-semibold tracking-tight text-zinc-950">
-                Direct sailings to Caribbean, Africa, UK &amp; Europe, Asia, and Oceania.
-              </h2>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-4">
-              <button
-                type="button"
-                onClick={() => onNavigate('/markets')}
-                className="inline-flex items-center gap-2 text-sm font-medium text-zinc-950 hover:text-blue-900 underline-offset-4 hover:underline cursor-pointer whitespace-nowrap shrink-0"
-              >
-                <span>Explore Global Markets</span>
-                <ArrowRight className="w-4 h-4" aria-hidden="true" />
-              </button>
-              <button
-                type="button"
-                onClick={() => onNavigate('/ports')}
-                className="inline-flex items-center gap-2 text-sm font-medium text-blue-900 hover:text-blue-950 underline-offset-4 hover:underline cursor-pointer whitespace-nowrap shrink-0"
-              >
-                <span>All {DESTINATION_PORTS.length} Global Ports &amp; Rates</span>
-                <ArrowRight className="w-4 h-4" aria-hidden="true" />
-              </button>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-            {featuredGlobalPorts.map((port) => (
-              <button
-                key={port.id}
-                type="button"
-                onClick={() => {
-                  onSelectPortForInventory(port.id);
-                  onNavigate('/inventory');
-                }}
-                className="text-left p-5 rounded-xl border border-slate-200 bg-slate-50/70 hover:border-blue-900 transition-colors cursor-pointer flex flex-col justify-between"
-              >
-                <div>
-                  <div className="text-xs font-medium text-blue-900">
-                    {port.country} · {port.region}
-                  </div>
-                  <h3 className="font-display text-base font-semibold text-zinc-950 mt-1">
-                    {port.name}
-                  </h3>
-                  <p className="text-xs text-slate-500 mt-1">{port.regionTag}</p>
-                </div>
-
-                <div className="mt-4 pt-3 border-t border-slate-200 flex items-baseline justify-between text-xs">
-                  <span className="text-slate-500">RoRo from</span>
-                  <span className="font-mono font-semibold text-zinc-950 tabular-nums">
-                    ${port.roroUsd.toLocaleString('en-US')}
-                  </span>
-                </div>
-              </button>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <ExportShowcaseSection onNavigate={onNavigate} surface="slate" />
+      <ExportShowcaseSection onNavigate={onNavigate} surface="white" />
 
       <AuctionProcessSection />
 
       {/* Latest Blog Articles Preview */}
       {blogs.filter((b) => b.status === 'Published').length > 0 && (
-        <section className="py-16 sm:py-20 bg-slate-50 border-b border-slate-200">
+        <section className="py-16 sm:py-20 bg-[#F3F5F8] border-b border-slate-200">
           <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-10">
               <div className="max-w-xl">
-                <p className="text-sm font-medium text-blue-900 mb-2">
-                  Export Journal &amp; Buyer Guides
-                </p>
-                <h2 className="font-display text-2xl sm:text-3xl font-semibold tracking-tight text-zinc-950">
+                <div className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[#C81E1E] mb-2">
+                  <span className="w-4 h-0.5 bg-[#C81E1E]" aria-hidden="true" />
+                  <span>Export Journal &amp; Buyer Guides</span>
+                </div>
+                <h2 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-[#0B1F3A]">
                   Insights on Japanese auctions, shipping routes &amp; port clearance.
                 </h2>
               </div>
@@ -425,7 +479,7 @@ export function HomePage({
               <button
                 type="button"
                 onClick={() => onNavigate('/blog')}
-                className="inline-flex items-center gap-2 text-sm font-medium text-blue-900 hover:text-blue-950 underline-offset-4 hover:underline cursor-pointer whitespace-nowrap shrink-0"
+                className="inline-flex items-center gap-2 text-sm font-semibold text-[#0B1F3A] hover:text-[#C81E1E] underline-offset-4 hover:underline cursor-pointer whitespace-nowrap shrink-0"
               >
                 <span>View All Articles</span>
                 <ArrowRight className="w-4 h-4" aria-hidden="true" />
@@ -445,7 +499,7 @@ export function HomePage({
                         ? onOpenBlogPost(post.slug)
                         : onNavigate(`/blog/${encodeURIComponent(post.slug)}`)
                     }
-                    className="group text-left bg-white border border-slate-200 hover:border-blue-900 rounded-xl overflow-hidden flex flex-col justify-between transition-colors cursor-pointer"
+                    className="group text-left bg-white border border-slate-200 hover:border-[#0B1F3A] rounded-xl overflow-hidden flex flex-col justify-between transition-colors cursor-pointer"
                   >
                     <div>
                       <div className="aspect-[16/10] w-full bg-slate-100 overflow-hidden border-b border-slate-200">
@@ -458,11 +512,11 @@ export function HomePage({
                       </div>
                       <div className="p-5">
                         <div className="flex items-center gap-2 text-xs text-slate-500">
-                          <span className="font-medium text-blue-900">{post.category}</span>
+                          <span className="font-semibold text-[#C81E1E]">{post.category}</span>
                           <span aria-hidden="true">·</span>
                           <span className="tabular-nums">{post.readTimeMinutes} min read</span>
                         </div>
-                        <h3 className="mt-2 font-display text-lg font-semibold text-zinc-950 group-hover:text-blue-900 transition-colors line-clamp-2 leading-snug">
+                        <h3 className="mt-2 font-display text-lg font-bold text-[#0B1F3A] group-hover:text-[#C81E1E] transition-colors line-clamp-2 leading-snug">
                           {post.title}
                         </h3>
                         <p className="mt-2 text-xs sm:text-sm text-slate-600 line-clamp-2 leading-relaxed">
@@ -470,7 +524,7 @@ export function HomePage({
                         </p>
                       </div>
                     </div>
-                    <div className="px-5 py-3.5 border-t border-slate-100 bg-slate-50/60 inline-flex items-center gap-1.5 text-xs font-medium text-blue-900">
+                    <div className="px-5 py-3.5 border-t border-slate-100 bg-slate-50/60 inline-flex items-center gap-1.5 text-xs font-semibold text-[#0B1F3A]">
                       <span>Read Full Guide</span>
                       <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
                     </div>
@@ -481,30 +535,33 @@ export function HomePage({
         </section>
       )}
 
-      {/* Direct Quick Lead & Quote Form Section */}
-      <section className="py-16 sm:py-20 bg-zinc-950 text-white">
+      {/* Maritime Navy Export Desk Lead Form Section */}
+      <section className="py-16 sm:py-20 bg-[#0B1F3A] text-white border-b border-slate-800">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
           <div className="lg:col-span-5 space-y-5">
-            <p className="text-xs font-medium text-blue-300">PJS Ventures Export Desk</p>
-            <h2 className="font-display text-2xl sm:text-3xl font-semibold tracking-tight">
-              Need a CIF quote or looking for a specific Japanese car?
+            <div className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-red-300">
+              <span className="w-4 h-0.5 bg-[#C81E1E]" aria-hidden="true" />
+              <span>PJS Ventures Export Desk</span>
+            </div>
+            <h2 className="font-display text-2xl sm:text-3xl font-bold tracking-tight">
+              Need a CIF proforma or looking for a specific Japanese car?
             </h2>
             <p className="text-sm text-slate-300 leading-relaxed">
               Send us the model, year, or destination port you need. Your inquiry goes directly to
-              our sales desk for an instant proforma and shipping schedule.
+              our Yokohama sales desk for an instant proforma invoice and RoRo shipping schedule.
             </p>
             <div className="flex flex-wrap items-center gap-3 pt-2">
               <button
                 type="button"
                 onClick={() => onNavigate('/calculator')}
-                className="px-4 py-2.5 text-sm font-medium text-white bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-lg transition-colors cursor-pointer"
+                className="px-4 py-2.5 text-sm font-medium text-white bg-white/10 hover:bg-white/15 border border-white/20 rounded-lg transition-colors cursor-pointer"
               >
                 Open Freight Calculator
               </button>
               <button
                 type="button"
                 onClick={() => onNavigate('/book')}
-                className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-zinc-950 bg-white hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+                className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-white bg-[#C81E1E] hover:bg-[#A51616] rounded-lg transition-colors cursor-pointer"
               >
                 <span>Full Booking Form</span>
                 <ArrowRight className="w-4 h-4" aria-hidden="true" />
@@ -512,7 +569,7 @@ export function HomePage({
             </div>
           </div>
 
-          <div className="lg:col-span-7 bg-zinc-900 border border-zinc-800 rounded-xl p-6 sm:p-8">
+          <div className="lg:col-span-7 bg-[#07162B] border border-white/15 rounded-xl p-6 sm:p-8">
             {submittedLead ? (
               <div className="space-y-4">
                 <div className="flex items-start gap-3">
@@ -536,7 +593,7 @@ export function HomePage({
                 <button
                   type="button"
                   onClick={() => setSubmittedLead(null)}
-                  className="px-4 py-2 text-xs font-medium text-zinc-950 bg-white hover:bg-slate-100 rounded-lg cursor-pointer"
+                  className="px-4 py-2 text-xs font-semibold text-white bg-[#C81E1E] hover:bg-[#A51616] rounded-lg cursor-pointer"
                 >
                   Send Another Inquiry
                 </button>
@@ -563,7 +620,7 @@ export function HomePage({
                       value={leadName}
                       onChange={(e) => setLeadName(e.target.value)}
                       placeholder="Full name or dealership"
-                      className="w-full px-3.5 py-2.5 text-sm rounded-lg border border-zinc-700 bg-zinc-950 text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-400"
+                      className="w-full px-3.5 py-2.5 text-sm rounded-lg border border-white/15 bg-[#0B1F3A] text-white placeholder:text-slate-400 focus:outline-none focus:border-white/40"
                     />
                   </div>
                   <div>
@@ -579,7 +636,7 @@ export function HomePage({
                       value={leadPhone}
                       onChange={(e) => setLeadPhone(e.target.value)}
                       placeholder="+1 242 555 0190"
-                      className="w-full px-3.5 py-2.5 text-sm rounded-lg border border-zinc-700 bg-zinc-950 text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-400"
+                      className="w-full px-3.5 py-2.5 text-sm rounded-lg border border-white/15 bg-[#0B1F3A] text-white placeholder:text-slate-400 focus:outline-none focus:border-white/40"
                     />
                   </div>
                 </div>
@@ -598,7 +655,7 @@ export function HomePage({
                       value={leadEmail}
                       onChange={(e) => setLeadEmail(e.target.value)}
                       placeholder="you@company.com"
-                      className="w-full px-3.5 py-2.5 text-sm rounded-lg border border-zinc-700 bg-zinc-950 text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-400"
+                      className="w-full px-3.5 py-2.5 text-sm rounded-lg border border-white/15 bg-[#0B1F3A] text-white placeholder:text-slate-400 focus:outline-none focus:border-white/40"
                     />
                   </div>
                   <div>
@@ -612,7 +669,7 @@ export function HomePage({
                       id="home-lead-port"
                       value={leadPortId}
                       onChange={(e) => setLeadPortId(e.target.value)}
-                      className="w-full px-3.5 py-2.5 text-sm rounded-lg border border-zinc-700 bg-zinc-950 text-white focus:outline-none focus:border-blue-400"
+                      className="w-full px-3.5 py-2.5 text-sm rounded-lg border border-white/15 bg-[#0B1F3A] text-white focus:outline-none focus:border-white/40"
                     >
                       {PORT_REGIONS.map((region) => (
                         <optgroup key={region} label={region}>
@@ -640,14 +697,14 @@ export function HomePage({
                     value={leadMessage}
                     onChange={(e) => setLeadMessage(e.target.value)}
                     placeholder="e.g. Looking for 2022 Toyota Hilux 4WD or CIF quote to Nassau..."
-                    className="w-full px-3.5 py-2.5 text-sm rounded-lg border border-zinc-700 bg-zinc-950 text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-400"
+                    className="w-full px-3.5 py-2.5 text-sm rounded-lg border border-white/15 bg-[#0B1F3A] text-white placeholder:text-slate-400 focus:outline-none focus:border-white/40"
                   />
                 </div>
 
                 <button
                   type="submit"
                   disabled={leadSubmitting}
-                  className="w-full sm:w-auto px-6 py-2.5 text-sm font-medium text-zinc-950 bg-white hover:bg-slate-100 disabled:bg-slate-400 rounded-lg transition-colors cursor-pointer"
+                  className="w-full sm:w-auto px-6 py-2.5 text-sm font-semibold text-white bg-[#C81E1E] hover:bg-[#A51616] disabled:bg-slate-600 rounded-lg transition-colors cursor-pointer"
                 >
                   {leadSubmitting ? 'Sending Inquiry...' : 'Submit Inquiry'}
                 </button>

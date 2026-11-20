@@ -5,9 +5,10 @@ import { CifCalculatorSection, type LockedCifQuote } from './components/CifCalcu
 import { Footer } from './components/Footer';
 import { GlobalMarketsPage } from './components/GlobalMarketsPage';
 import { HomePage } from './components/HomePage';
+import type { QuickInventorySearch } from './components/HeroSection';
 import { HowToBuyPage } from './components/HowToBuyPage';
 import { ImportInquiryForm } from './components/ImportInquiryForm';
-import { InventorySection } from './components/InventorySection';
+import { InventorySection, type ListingTab } from './components/InventorySection';
 import { Navbar, type AppRoute } from './components/Navbar';
 import { PortDealsPage } from './components/PortDealsPage';
 import { PortsPage } from './components/PortsPage';
@@ -49,6 +50,7 @@ import type {
   GlobalPortRegion,
   PortalUser,
   UnloadingVideo,
+  VehicleCategory,
   VehicleStatus,
 } from './types/autoTrade.ts';
 
@@ -111,6 +113,11 @@ export default function App() {
   const [lockedCif, setLockedCif] = useState<LockedCifQuote | null>(null);
   const [prefillNotes, setPrefillNotes] = useState<string | null>(null);
   const [inventoryPortFilter, setInventoryPortFilter] = useState<string>('all');
+  const [inventoryCategoryFilter, setInventoryCategoryFilter] =
+    useState<VehicleCategory>('All Stock');
+  const [inventoryDealModeFilter, setInventoryDealModeFilter] =
+    useState<ListingTab>('All Vehicles');
+  const [inventorySearchQuery, setInventorySearchQuery] = useState<string>('');
   const [calculatorPortId, setCalculatorPortId] = useState<string | undefined>(undefined);
   const [portsRegionFilter, setPortsRegionFilter] = useState<GlobalPortRegion | 'all'>('all');
 
@@ -314,7 +321,26 @@ export default function App() {
   };
 
   const handleSelectPortForInventory = (portId: string) => {
+    setInventoryCategoryFilter('All Stock');
+    setInventoryDealModeFilter('All Vehicles');
+    setInventorySearchQuery('');
     setInventoryPortFilter(portId);
+  };
+
+  const handleSelectCategoryForInventory = (category: VehicleCategory) => {
+    setInventoryCategoryFilter(category);
+    setInventoryDealModeFilter('All Vehicles');
+    setInventoryPortFilter('all');
+    setInventorySearchQuery('');
+    navigate('/inventory');
+  };
+
+  const handleQuickSearchInventory = (filters: QuickInventorySearch) => {
+    setInventorySearchQuery(filters.query);
+    setInventoryCategoryFilter(filters.category);
+    setInventoryDealModeFilter(filters.dealMode);
+    setInventoryPortFilter(filters.portId);
+    navigate('/inventory');
   };
 
   const handleSelectPortForCalculator = (portId: string) => {
@@ -499,7 +525,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50 text-zinc-950">
+    <div className="min-h-screen flex flex-col bg-[#F3F5F8] text-slate-900">
       <Navbar currentRoute={route} onNavigate={navigate} />
 
       <main className="flex-1">
@@ -508,6 +534,7 @@ export default function App() {
             vehicles={vehicles}
             blogs={blogs}
             currency={currency}
+            onCurrencyChange={setCurrency}
             shortlistIds={shortlistIds}
             onToggleShortlist={handleToggleShortlist}
             onInspectVehicle={handleOpenVehiclePage}
@@ -515,6 +542,8 @@ export default function App() {
             onNavigate={navigate}
             onOpenBlogPost={handleOpenBlogPost}
             onSelectPortForInventory={handleSelectPortForInventory}
+            onSelectCategoryForInventory={handleSelectCategoryForInventory}
+            onQuickSearchInventory={handleQuickSearchInventory}
             onSubmitQuickLead={handleSubmitBooking}
           />
         )}
@@ -531,6 +560,9 @@ export default function App() {
             onBookOrClaimVehicle={handleBookOrClaimVehicle}
             onRequestShortlistQuote={handleRequestShortlistQuote}
             initialPortId={inventoryPortFilter}
+            initialCategory={inventoryCategoryFilter}
+            initialListingTab={inventoryDealModeFilter}
+            initialSearchQuery={inventorySearchQuery}
           />
         )}
 
@@ -623,7 +655,10 @@ export default function App() {
         )}
       </main>
 
-      <Footer onNavigate={navigate} />
+      <Footer
+        onNavigate={navigate}
+        onSelectInventoryCategory={handleSelectCategoryForInventory}
+      />
 
       <TradeChatbot
         vehicles={vehicles}

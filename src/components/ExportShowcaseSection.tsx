@@ -107,12 +107,12 @@ export function ExportShowcaseSection({
     <section
       id="export-operations-gallery"
       className={`py-16 sm:py-20 border-b border-slate-200 ${
-        surface === 'slate' ? 'bg-slate-50' : 'bg-white'
+        surface === 'slate' ? 'bg-[#F3F5F8]' : 'bg-white'
       }`}
     >
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="max-w-2xl mb-10">
-          <p className="text-sm font-medium text-blue-900 mb-2">
+          <p className="text-sm font-medium text-[#0B1F3A] mb-2">
             Yard Inspection &amp; Port Logistics Gallery
           </p>
           <h2 className="font-display text-3xl sm:text-4xl font-semibold tracking-tight text-zinc-950">
@@ -139,14 +139,14 @@ export function ExportShowcaseSection({
             <div className="p-5 sm:p-6 bg-white border-t border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="space-y-1.5 max-w-xl">
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-                  <span className="font-mono font-semibold text-blue-900">
+                  <span className="font-mono font-semibold text-[#0B1F3A]">
                     {activeSlide.stepTag}
                   </span>
                   <span aria-hidden="true" className="text-slate-300">
                     |
                   </span>
                   <span className="inline-flex items-center gap-1 text-slate-600 font-medium">
-                    <MapPin className="w-3.5 h-3.5 text-blue-900" aria-hidden="true" />
+                    <MapPin className="w-3.5 h-3.5 text-[#0B1F3A]" aria-hidden="true" />
                     {activeSlide.facility}
                   </span>
                 </div>
@@ -160,7 +160,7 @@ export function ExportShowcaseSection({
                 <button
                   type="button"
                   onClick={() => onNavigate(activeSlide.ctaRoute)}
-                  className="inline-flex items-center gap-2 px-4 py-2.5 text-xs sm:text-sm font-medium text-white bg-blue-900 hover:bg-blue-950 rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                  className="inline-flex items-center gap-2 px-4 py-2.5 text-xs sm:text-sm font-medium text-white bg-[#C81E1E] hover:bg-[#A51616] rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
                 >
                   <span>{activeSlide.ctaLabel}</span>
                   <ArrowRight className="w-4 h-4" aria-hidden="true" />
@@ -173,7 +173,7 @@ export function ExportShowcaseSection({
           <div className="lg:col-span-4 space-y-3">
             <div className="flex items-center justify-between text-xs font-medium text-slate-500 px-1">
               <span className="inline-flex items-center gap-1.5">
-                <Camera className="w-3.5 h-3.5 text-blue-900" aria-hidden="true" />
+                <Camera className="w-3.5 h-3.5 text-[#0B1F3A]" aria-hidden="true" />
                 <span>Export Photo Stages (4)</span>
               </span>
               <span>Select to inspect</span>
@@ -190,7 +190,7 @@ export function ExportShowcaseSection({
                     aria-pressed={isActive}
                     className={`w-full text-left p-3 rounded-xl border transition-colors flex gap-3.5 items-center cursor-pointer ${
                       isActive
-                        ? 'border-blue-900 bg-blue-50/60'
+                        ? 'border-[#0B1F3A] bg-[#0B1F3A]/5'
                         : 'border-slate-200 bg-white hover:border-slate-300'
                     }`}
                   >
@@ -204,7 +204,7 @@ export function ExportShowcaseSection({
                     </div>
 
                     <div className="min-w-0 flex-1">
-                      <div className="text-[11px] font-mono font-medium text-blue-900 truncate">
+                      <div className="text-[11px] font-mono font-medium text-[#0B1F3A] truncate">
                         {item.stepTag}
                       </div>
                       <div className="mt-0.5 text-sm font-semibold text-zinc-950 line-clamp-2 leading-snug">

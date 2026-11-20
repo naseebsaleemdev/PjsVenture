@@ -38,7 +38,7 @@ export function Navbar({ currentRoute, onNavigate }: NavbarProps) {
   };
 
   return (
-    <header className="sticky top-0 z-40 bg-slate-50/95 backdrop-blur-sm border-b border-slate-200">
+    <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-sm border-t-[3px] border-[#0B1F3A] border-b border-slate-200">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-6">
         {/* Zone 1: Brand Logo */}
         <a
@@ -48,12 +48,12 @@ export function Navbar({ currentRoute, onNavigate }: NavbarProps) {
             go('/');
           }}
           aria-label="PJS Ventures Home"
-          className="inline-flex items-center shrink-0 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-blue-900 rounded"
+          className="inline-flex items-center shrink-0 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#0B1F3A] rounded"
         >
           <img
             src="/assets/aistudio/PJS_Ventures_-_Transparent__White_Theme__3ad2a367.png"
             alt="PJS Ventures"
-            className="h-12 w-auto object-contain"
+            className="h-11 w-auto object-contain"
           />
         </a>
 
@@ -78,8 +78,8 @@ export function Navbar({ currentRoute, onNavigate }: NavbarProps) {
                 aria-current={active ? 'page' : undefined}
                 className={`whitespace-nowrap shrink-0 py-2 underline-offset-8 transition-colors duration-150 rounded ${
                   active
-                    ? 'text-zinc-950 underline decoration-2 decoration-blue-900'
-                    : 'text-slate-600 hover:text-zinc-950 hover:underline'
+                    ? 'text-[#0B1F3A] font-semibold underline decoration-2 decoration-[#C81E1E]'
+                    : 'text-slate-600 hover:text-[#0B1F3A] hover:underline decoration-slate-300'
                 }`}
               >
                 {item.label}
@@ -93,7 +93,7 @@ export function Navbar({ currentRoute, onNavigate }: NavbarProps) {
           <button
             type="button"
             onClick={() => go('/book')}
-            className="hidden lg:inline-flex items-center justify-center px-5 py-2.5 text-sm font-medium text-white bg-blue-900 hover:bg-blue-950 rounded-lg transition-colors duration-150 whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-900"
+            className="hidden lg:inline-flex items-center justify-center px-5 py-2.5 text-sm font-semibold text-white bg-[#C81E1E] hover:bg-[#A51616] rounded-lg transition-colors duration-150 whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#C81E1E]"
           >
             Book a Vehicle
           </button>
@@ -103,7 +103,7 @@ export function Navbar({ currentRoute, onNavigate }: NavbarProps) {
             onClick={() => setMobileOpen((prev) => !prev)}
             aria-expanded={mobileOpen}
             aria-label={mobileOpen ? 'Close menu' : 'Open menu'}
-            className="lg:hidden inline-flex items-center justify-center w-11 h-11 rounded-lg border border-slate-200 bg-white text-zinc-950 hover:bg-slate-100 transition-colors duration-150 cursor-pointer"
+            className="lg:hidden inline-flex items-center justify-center w-11 h-11 rounded-lg border border-slate-200 bg-white text-[#0B1F3A] hover:bg-slate-100 transition-colors duration-150 cursor-pointer"
           >
             {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
@@ -121,7 +121,7 @@ export function Navbar({ currentRoute, onNavigate }: NavbarProps) {
                   type="button"
                   onClick={() => go(item.route)}
                   className={`w-full text-left px-3 py-3 text-base font-medium rounded-lg cursor-pointer ${
-                    active ? 'bg-blue-50 text-blue-900' : 'text-slate-700 hover:bg-slate-50'
+                    active ? 'bg-[#0B1F3A]/5 text-[#0B1F3A] font-semibold' : 'text-slate-700 hover:bg-slate-50'
                   }`}
                 >
                   {item.label}
@@ -131,7 +131,7 @@ export function Navbar({ currentRoute, onNavigate }: NavbarProps) {
             <button
               type="button"
               onClick={() => go('/book')}
-              className="mt-2 w-full px-4 py-3 text-sm font-medium text-white bg-blue-900 hover:bg-blue-950 rounded-lg cursor-pointer"
+              className="mt-2 w-full px-4 py-3 text-sm font-semibold text-white bg-[#C81E1E] hover:bg-[#A51616] rounded-lg cursor-pointer"
             >
               Book a Vehicle
             </button>

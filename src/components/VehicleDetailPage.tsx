@@ -109,7 +109,7 @@ export function VehicleDetailPage({
   };
 
   return (
-    <div className="bg-slate-50">
+    <div className="bg-[#F3F5F8]">
       {/* Top Breadcrumb Bar */}
       <div className="bg-white border-b border-slate-200">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-wrap items-center justify-between gap-4">
@@ -216,7 +216,7 @@ export function VehicleDetailPage({
                       aria-label={`View photo ${idx + 1}`}
                       className={`aspect-[4/3] rounded-lg overflow-hidden border transition-all cursor-pointer ${
                         idx === safeIndex
-                          ? 'border-blue-900 ring-2 ring-blue-900/25'
+                          ? 'border-[#0B1F3A] ring-2 ring-[#0B1F3A]/25'
                           : 'border-slate-200 opacity-75 hover:opacity-100'
                       }`}
                     >
@@ -349,7 +349,7 @@ export function VehicleDetailPage({
                   <div className="text-xs text-slate-600 flex items-center gap-2">
                     <span
                       className={`font-semibold ${
-                        isBalanceDeal ? 'text-blue-900' : 'text-zinc-950'
+                        isBalanceDeal ? 'text-[#C81E1E]' : 'text-[#0B1F3A]'
                       }`}
                     >
                       {isBalanceDeal ? 'Port Balance-Release Deal' : 'Direct Japan Import'}
@@ -365,10 +365,10 @@ export function VehicleDetailPage({
                         key={code}
                         type="button"
                         onClick={() => onCurrencyChange(code)}
-                        className={`px-2 py-1 text-[11px] font-medium rounded cursor-pointer ${
+                        className={`px-2 py-1 text-[11px] font-semibold rounded cursor-pointer ${
                           currency === code
-                            ? 'bg-zinc-950 text-white'
-                            : 'text-slate-600 hover:text-zinc-950'
+                            ? 'bg-[#0B1F3A] text-white'
+                            : 'text-slate-600 hover:text-[#0B1F3A]'
                         }`}
                       >
                         {code}
@@ -406,7 +406,7 @@ export function VehicleDetailPage({
                       <span className="text-sm font-semibold text-zinc-950">
                         Remaining Balance to Clear
                       </span>
-                      <span className="font-mono text-2xl font-semibold text-blue-900 tabular-nums">
+                      <span className="font-mono text-2xl font-bold text-[#C81E1E] tabular-nums">
                         {formatAutoPrice(vehicle.transit.balanceDueUsd, currency)}
                       </span>
                     </div>
@@ -423,7 +423,7 @@ export function VehicleDetailPage({
                       <span className="text-sm font-semibold text-zinc-950">
                         Estimated CIF Price
                       </span>
-                      <span className="font-mono text-2xl font-semibold text-blue-900 tabular-nums">
+                      <span className="font-mono text-2xl font-bold text-[#0B1F3A] tabular-nums">
                         {formatAutoPrice(vehicle.transit.fullCifUsd, currency)}
                       </span>
                     </div>
@@ -483,7 +483,7 @@ export function VehicleDetailPage({
                 <button
                   type="button"
                   onClick={() => onBookOrClaimVehicle(vehicle)}
-                  className="w-full inline-flex items-center justify-center gap-2 px-5 py-3.5 text-sm font-medium text-white bg-blue-900 hover:bg-blue-950 rounded-lg transition-colors cursor-pointer"
+                  className="w-full inline-flex items-center justify-center gap-2 px-5 py-3.5 text-sm font-semibold text-white bg-[#C81E1E] hover:bg-[#A51616] rounded-lg transition-colors cursor-pointer"
                 >
                   <span>
                     {isBalanceDeal ? 'Claim & Pay Remaining Balance' : 'Book This Car for Import'}
@@ -494,9 +494,9 @@ export function VehicleDetailPage({
                 <div className="grid grid-cols-2 gap-2.5">
                   <a
                     href="#listing-freight-calculator"
-                    className="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 text-xs font-medium rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-zinc-950 transition-colors"
+                    className="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 text-xs font-medium rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-[#0B1F3A] transition-colors"
                   >
-                    <Ship className="w-3.5 h-3.5 text-blue-900" aria-hidden="true" />
+                    <Ship className="w-3.5 h-3.5 text-[#0B1F3A]" aria-hidden="true" />
                     <span>Freight Calculator ↓</span>
                   </a>
 
@@ -505,12 +505,12 @@ export function VehicleDetailPage({
                     onClick={() => onToggleShortlist(vehicle.id)}
                     className={`inline-flex items-center justify-center gap-1.5 px-3 py-2.5 text-xs font-medium rounded-lg border transition-colors cursor-pointer ${
                       isShortlisted
-                        ? 'border-blue-900 bg-blue-50 text-blue-900'
+                        ? 'border-[#0B1F3A] bg-[#0B1F3A]/5 text-[#0B1F3A]'
                         : 'border-slate-200 bg-white text-zinc-950 hover:bg-slate-50'
                     }`}
                   >
                     <Bookmark
-                      className={`w-3.5 h-3.5 ${isShortlisted ? 'fill-current text-blue-900' : ''}`}
+                      className={`w-3.5 h-3.5 ${isShortlisted ? 'fill-current text-[#C81E1E]' : ''}`}
                       aria-hidden="true"
                     />
                     <span>{isShortlisted ? 'Shortlisted' : 'Save Unit'}</span>
@@ -525,15 +525,15 @@ export function VehicleDetailPage({
       {/* Embedded Freight Calculator Below the Vehicle */}
       <section
         id="listing-freight-calculator"
-        className="py-12 sm:py-16 bg-slate-50 border-b border-slate-200"
+        className="py-12 sm:py-16 bg-[#F3F5F8] border-b border-slate-200"
       >
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-2xl mb-6">
-            <p className="text-sm font-medium text-blue-900 mb-1.5">
-              Vehicle Freight & CBM Estimator
+            <p className="text-xs font-semibold uppercase tracking-wider text-[#C81E1E] mb-1.5">
+              Vehicle Freight &amp; CBM Estimator
             </p>
-            <h2 className="font-display text-2xl sm:text-3xl font-semibold tracking-tight text-zinc-950">
-              Calculate shipping & landed cost for this {vehicle.year} {vehicle.makeModel}
+            <h2 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-[#0B1F3A]">
+              Calculate shipping &amp; landed cost for this {vehicle.year} {vehicle.makeModel}
             </h2>
           </div>
 
@@ -548,16 +548,16 @@ export function VehicleDetailPage({
 
       {/* More Vehicles Strip */}
       {relatedVehicles.length > 0 && (
-        <section className="py-12 sm:py-16 bg-slate-50">
+        <section className="py-12 sm:py-16 bg-white">
           <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex items-center justify-between mb-8">
-              <h2 className="font-display text-2xl font-semibold text-zinc-950">
+              <h2 className="font-display text-2xl font-bold text-[#0B1F3A]">
                 More Vehicles from PJS Ventures
               </h2>
               <button
                 type="button"
                 onClick={() => onNavigate('/inventory')}
-                className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-900 hover:underline cursor-pointer"
+                className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#C81E1E] hover:underline cursor-pointer"
               >
                 <span>View All Inventory</span>
                 <ArrowRight className="w-4 h-4" aria-hidden="true" />

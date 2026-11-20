@@ -233,16 +233,16 @@ export function FreightCalculatorWidget({
   return (
     <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-xs">
       {/* CALCULATOR TOP HEADER */}
-      <div className="bg-zinc-950 text-white px-5 sm:px-7 py-5 flex flex-col lg:flex-row lg:items-center justify-between gap-5">
+      <div className="bg-[#0B1F3A] text-white px-5 sm:px-7 py-5 flex flex-col lg:flex-row lg:items-center justify-between gap-5">
         <div className="flex items-center gap-3.5">
-          <div className="w-11 h-11 rounded-lg bg-blue-900/90 border border-blue-800 flex items-center justify-center shrink-0">
+          <div className="w-11 h-11 rounded-lg bg-[#C81E1E] flex items-center justify-center shrink-0">
             <Ship className="w-5 h-5 text-white" aria-hidden="true" />
           </div>
           <div>
             <div className="font-display text-lg font-bold tracking-tight text-white">
               FREIGHT CALCULATOR
             </div>
-            <div className="text-[11px] font-mono tracking-wider text-slate-400">
+            <div className="text-[11px] font-mono tracking-wider text-slate-300">
               PJS VENTURES · EXPORT LOGISTICS
             </div>
           </div>
@@ -250,18 +250,18 @@ export function FreightCalculatorWidget({
 
         {/* 3 Header Summary Badges */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <div className="px-4 py-2.5 rounded-lg bg-zinc-900 border border-zinc-800">
+          <div className="px-4 py-2.5 rounded-lg bg-[#07162B] border border-white/10">
             <div className="text-[11px] text-slate-400">Stock From</div>
             <div className="font-display text-base font-semibold text-white mt-0.5">
               {originCountry}
             </div>
-            <div className="text-[11px] text-blue-300 inline-flex items-center gap-1 mt-0.5">
-              <Check className="w-3 h-3" aria-hidden="true" />
+            <div className="text-[11px] text-slate-300 inline-flex items-center gap-1 mt-0.5">
+              <Check className="w-3 h-3 text-emerald-400" aria-hidden="true" />
               <span>Auto-detected</span>
             </div>
           </div>
 
-          <div className="px-4 py-2.5 rounded-lg bg-zinc-900 border border-zinc-800">
+          <div className="px-4 py-2.5 rounded-lg bg-[#07162B] border border-white/10">
             <div className="text-[11px] text-slate-400">
               {isBalanceDeal ? 'Port Balance Price' : 'Vehicle Price'}
             </div>
@@ -274,7 +274,7 @@ export function FreightCalculatorWidget({
             </div>
           </div>
 
-          <div className="px-4 py-2.5 rounded-lg bg-zinc-900 border border-zinc-800">
+          <div className="px-4 py-2.5 rounded-lg bg-[#07162B] border border-white/10">
             <div className="text-[11px] text-slate-400">Volume (CBM)</div>
             <div className="font-mono text-base font-semibold text-white tabular-nums mt-0.5">
               {cbm.toFixed(1)}{' '}
@@ -554,7 +554,7 @@ export function FreightCalculatorWidget({
               <button
                 type="button"
                 onClick={handleCalculate}
-                className="w-full inline-flex items-center justify-center gap-2 px-5 py-3 text-sm font-semibold text-white bg-blue-900 hover:bg-blue-950 rounded-lg transition-colors cursor-pointer"
+                className="w-full inline-flex items-center justify-center gap-2 px-5 py-3 text-sm font-semibold text-white bg-[#C81E1E] hover:bg-[#A51616] rounded-lg transition-colors cursor-pointer"
               >
                 <span>{isCalculating ? 'CALCULATING...' : 'CALCULATE FREIGHT'}</span>
                 <ArrowRight className="w-4 h-4" aria-hidden="true" />
@@ -653,7 +653,7 @@ export function FreightCalculatorWidget({
                 <button
                   type="button"
                   onClick={() => handleLockQuote('RoRo Vessel')}
-                  className="px-4 py-2.5 text-sm font-medium text-white bg-blue-900 hover:bg-blue-950 rounded-lg transition-colors cursor-pointer"
+                  className="px-4 py-2.5 text-sm font-medium text-white bg-[#C81E1E] hover:bg-[#A51616] rounded-lg transition-colors cursor-pointer"
                 >
                   Claim Balance at This Port
                 </button>
@@ -712,7 +712,7 @@ export function FreightCalculatorWidget({
                 <button
                   type="button"
                   onClick={() => handleLockQuote('20ft Container')}
-                  className="px-4 py-2.5 text-sm font-medium text-white bg-blue-900 hover:bg-blue-950 rounded-lg transition-colors cursor-pointer"
+                  className="px-4 py-2.5 text-sm font-medium text-white bg-[#C81E1E] hover:bg-[#A51616] rounded-lg transition-colors cursor-pointer"
                 >
                   Request Container Quote
                 </button>
@@ -756,7 +756,7 @@ export function FreightCalculatorWidget({
                 <button
                   type="button"
                   onClick={() => handleLockQuote('RoRo Vessel')}
-                  className="px-4 py-2.5 text-sm font-medium text-white bg-blue-900 hover:bg-blue-950 rounded-lg transition-colors cursor-pointer"
+                  className="px-4 py-2.5 text-sm font-medium text-white bg-[#C81E1E] hover:bg-[#A51616] rounded-lg transition-colors cursor-pointer"
                 >
                   Request Custom Quote
                 </button>
@@ -861,7 +861,7 @@ export function FreightCalculatorWidget({
                 <button
                   type="button"
                   onClick={() => handleLockQuote('RoRo Vessel')}
-                  className="px-4 py-2.5 text-sm font-medium text-white bg-blue-900 hover:bg-blue-950 rounded-lg transition-colors cursor-pointer"
+                  className="px-4 py-2.5 text-sm font-medium text-white bg-[#C81E1E] hover:bg-[#A51616] rounded-lg transition-colors cursor-pointer"
                 >
                   Lock Quote & Book Car
                 </button>
@@ -882,8 +882,8 @@ export function FreightCalculatorWidget({
 
       {/* CALCULATOR FOOTER BAR */}
       <div className="bg-white border-t border-slate-200 px-5 sm:px-7 py-3.5 flex flex-wrap items-center justify-between gap-2 text-xs">
-        <div className="font-display font-bold tracking-tight text-zinc-950">
-          PJS <span className="text-blue-900">VENTURES</span>
+        <div className="font-display font-bold tracking-tight text-[#0B1F3A]">
+          PJS <span className="text-[#C81E1E]">VENTURES</span>
         </div>
         <div className="text-slate-500">
           Origin auto-detected · 190+ countries · RO-RO: Rate × CBM · Port Balance units lock to

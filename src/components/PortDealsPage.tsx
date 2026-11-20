@@ -34,10 +34,10 @@ export function PortDealsPage({
       />
 
       {/* 3-Step Balance Clearance Explainer */}
-      <section className="py-12 bg-slate-50 border-b border-slate-200">
+      <section className="py-12 bg-[#F3F5F8] border-b border-slate-200">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="bg-white border border-slate-200 rounded-xl p-6">
-            <Ship className="w-5 h-5 text-blue-900 mb-3" aria-hidden="true" />
+            <Ship className="w-5 h-5 text-[#C81E1E] mb-3" aria-hidden="true" />
             <h2 className="font-display text-base font-semibold text-zinc-950">
               1. Already Aboard Vessel or Docked
             </h2>
@@ -48,7 +48,7 @@ export function PortDealsPage({
           </div>
 
           <div className="bg-white border border-slate-200 rounded-xl p-6">
-            <Anchor className="w-5 h-5 text-blue-900 mb-3" aria-hidden="true" />
+            <Anchor className="w-5 h-5 text-[#C81E1E] mb-3" aria-hidden="true" />
             <h2 className="font-display text-base font-semibold text-zinc-950">
               2. Pay Only the Remaining Balance
             </h2>
@@ -59,7 +59,7 @@ export function PortDealsPage({
           </div>
 
           <div className="bg-white border border-slate-200 rounded-xl p-6">
-            <FileCheck2 className="w-5 h-5 text-blue-900 mb-3" aria-hidden="true" />
+            <FileCheck2 className="w-5 h-5 text-[#C81E1E] mb-3" aria-hidden="true" />
             <h2 className="font-display text-base font-semibold text-zinc-950">
               3. Direct B/L Consignee Transfer
             </h2>
@@ -87,7 +87,7 @@ export function PortDealsPage({
             <button
               type="button"
               onClick={() => onNavigate('/inventory')}
-              className="inline-flex items-center gap-2 text-sm font-medium text-blue-900 hover:underline underline-offset-4 cursor-pointer"
+              className="inline-flex items-center gap-2 text-sm font-medium text-[#C81E1E] hover:underline underline-offset-4 cursor-pointer"
             >
               <span>Browse All Direct Japan Imports</span>
               <ArrowRight className="w-4 h-4" aria-hidden="true" />
@@ -106,7 +106,7 @@ export function PortDealsPage({
               <button
                 type="button"
                 onClick={() => onNavigate('/book')}
-                className="mt-5 px-5 py-2.5 text-sm font-medium text-white bg-blue-900 rounded-lg cursor-pointer"
+                className="mt-5 px-5 py-2.5 text-sm font-semibold text-white bg-[#C81E1E] hover:bg-[#A51616] rounded-lg cursor-pointer"
               >
                 Register Port Alert
               </button>

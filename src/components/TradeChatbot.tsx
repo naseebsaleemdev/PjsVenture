@@ -299,7 +299,7 @@ export function TradeChatbot({
                                   setIsOpen(false);
                                   onBookVehicle(veh);
                                 }}
-                                className="px-2 py-1 text-[11px] font-medium text-white bg-blue-900 hover:bg-blue-950 rounded cursor-pointer"
+                                className="px-2 py-1 text-[11px] font-semibold text-white bg-[#C81E1E] hover:bg-[#A51616] rounded cursor-pointer"
                               >
                                 Book
                               </button>
@@ -379,7 +379,7 @@ export function TradeChatbot({
               type="submit"
               disabled={!input.trim() || loading}
               aria-label="Send message"
-              className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-blue-900 hover:bg-blue-950 disabled:bg-slate-300 text-white transition-colors shrink-0 cursor-pointer"
+              className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-[#C81E1E] hover:bg-[#A51616] disabled:bg-slate-300 text-white transition-colors shrink-0 cursor-pointer"
             >
               <Send className="w-4 h-4" aria-hidden="true" />
             </button>
@@ -393,7 +393,7 @@ export function TradeChatbot({
         onClick={() => setIsOpen((prev) => !prev)}
         aria-expanded={isOpen}
         aria-label={isOpen ? 'Close PJS Ventures chat' : 'Open PJS Ventures Export Concierge chat'}
-        className="inline-flex items-center gap-2.5 px-4 py-3 rounded-xl bg-blue-900 hover:bg-blue-950 text-white shadow-lg border border-blue-800 transition-colors cursor-pointer"
+        className="inline-flex items-center gap-2.5 px-4 py-3 rounded-xl bg-[#0B1F3A] hover:bg-[#12315B] text-white shadow-lg border border-white/15 transition-colors cursor-pointer"
       >
         {isOpen ? (
           <>

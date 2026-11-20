@@ -37,7 +37,7 @@ export function PortsPage({
         subtitle="Weekly RoRo and container sailings from Yokohama, Nagoya, Osaka, and Dubai to major terminals across the Caribbean & Americas, Africa, Europe & UK, Asia, and Oceania."
       />
 
-      <section className="py-12 sm:py-16 bg-slate-50">
+      <section className="py-12 sm:py-16 bg-[#F3F5F8]">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
           {/* Region Filter Tabs */}
           <div className="bg-white border border-slate-200 rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
@@ -47,7 +47,7 @@ export function PortsPage({
                 onClick={() => setActiveRegion('all')}
                 className={`px-3.5 py-1.5 text-xs font-medium rounded-md border transition-colors cursor-pointer ${
                   activeRegion === 'all'
-                    ? 'border-blue-900 bg-blue-900 text-white'
+                    ? 'border-[#0B1F3A] bg-[#0B1F3A] text-white'
                     : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-zinc-950'
                 }`}
               >
@@ -63,7 +63,7 @@ export function PortsPage({
                     onClick={() => setActiveRegion(region)}
                     className={`px-3.5 py-1.5 text-xs font-medium rounded-md border transition-colors cursor-pointer ${
                       active
-                        ? 'border-blue-900 bg-blue-900 text-white'
+                        ? 'border-[#0B1F3A] bg-[#0B1F3A] text-white'
                         : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-zinc-950'
                     }`}
                   >
@@ -90,7 +90,7 @@ export function PortsPage({
               >
                 <div>
                   <div className="flex items-center justify-between gap-4 text-xs text-slate-500 mb-2">
-                    <span className="font-medium text-blue-900">
+                    <span className="font-semibold text-[#C81E1E]">
                       {port.country} · {port.region}
                     </span>
                     <span className="inline-flex items-center gap-1.5 font-mono tabular-nums shrink-0">
@@ -143,7 +143,7 @@ export function PortsPage({
                       onSelectPortForCalculator(port.id);
                       onNavigate('/calculator');
                     }}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-medium text-white bg-blue-900 hover:bg-blue-950 rounded-lg transition-colors cursor-pointer"
+                    className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-[#C81E1E] hover:bg-[#A51616] rounded-lg transition-colors cursor-pointer"
                   >
                     <span>Calculate Landed CIF</span>
                     <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />

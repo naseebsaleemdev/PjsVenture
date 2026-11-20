@@ -197,14 +197,14 @@ export function ImportInquiryForm({
         title="Book your vehicle for Japan-to-Caribbean import."
         subtitle="Reserve any listed yard car or claim an in-transit port balance-release unit. Our export desk prepares your proforma invoice and RoRo shipping schedule."
       />
-      <section className="py-12 sm:py-16 bg-slate-50">
+      <section className="py-12 sm:py-16 bg-[#F3F5F8]">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12 items-start">
           <div className="lg:col-span-5">
-            <p className="text-sm font-medium text-blue-900 mb-2">
+            <p className="text-xs font-semibold uppercase tracking-wider text-[#C81E1E] mb-2">
               Book Vehicle or Request Import
             </p>
-            <h2 className="font-display text-3xl sm:text-4xl font-semibold tracking-tight text-zinc-950">
+            <h2 className="font-display text-3xl sm:text-4xl font-bold tracking-tight text-[#0B1F3A]">
               Reserve your car online for Japan-to-Caribbean dispatch.
             </h2>
             <p className="mt-4 text-base text-slate-600 leading-relaxed">
@@ -466,7 +466,7 @@ export function ImportInquiryForm({
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="px-6 py-3 text-sm font-medium text-white bg-blue-900 hover:bg-blue-950 disabled:bg-slate-400 rounded-lg transition-colors duration-150 whitespace-nowrap shrink-0 cursor-pointer"
+                    className="px-6 py-3 text-sm font-semibold text-white bg-[#C81E1E] hover:bg-[#A51616] disabled:bg-slate-400 rounded-lg transition-colors duration-150 whitespace-nowrap shrink-0 cursor-pointer"
                   >
                     {submitting ? 'Submitting Booking...' : 'Confirm Vehicle Booking'}
                   </button>
