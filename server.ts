@@ -399,6 +399,15 @@ export function createApiApp(): express.Express {
 
   app.use(express.json({ limit: '15mb' }));
 
+  app.use('/api', (req, res, next) => {
+    if (req.path !== '/events') {
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+    }
+    next();
+  });
+
   // SSE clients for real-time multi-user sync (invalidation scopes only — zero PII)
   const sseClients = new Set<Response>();
 
