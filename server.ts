@@ -33,7 +33,9 @@ import type {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const BUNDLED_DATA_DIR = path.resolve(__dirname, 'data');
+const BUNDLED_DATA_DIR = fs.existsSync(path.resolve(__dirname, 'data', 'store.json'))
+  ? path.resolve(__dirname, 'data')
+  : path.resolve(process.cwd(), 'data');
 const BUNDLED_STORE_PATH = path.join(BUNDLED_DATA_DIR, 'store.json');
 
 function resolveWritableDataDir(): string {
