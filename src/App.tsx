@@ -18,7 +18,7 @@ import { VehicleDetailPage } from './components/VehicleDetailPage';
 import { INITIAL_BLOG_POSTS } from './data/seedBlogs.ts';
 import { formatAutoPrice } from './data/seedInventory.ts';
 import { auth } from './lib/firebase.ts';
-import { signOutPortal } from './lib/portalAuth.ts';
+import { signInPortalWithGoogle, signOutPortal } from './lib/portalAuth.ts';
 import { INITIAL_PORTAL_USERS } from './lib/portalRoles.ts';
 import {
   createBlogRecord,
@@ -31,10 +31,11 @@ import {
   deletePortalUserRecord,
   deleteVehicleRecord,
   deleteVideoRecord,
-  loadPortalPrivateData,
+  formatPortalErrorMessage,
   resolveAuthorizedPortalUser,
   seedInitialCatalogIfEmpty,
   seedStarterBlogsOnce,
+  subscribePortalPrivateData,
   subscribePublicCatalog,
   updateBlogRecord,
   updateBookingRecord,
@@ -206,20 +207,18 @@ export default function App() {
 
         setAuthError(null);
         setActivePortalUser(resolution.user);
-        await seedInitialCatalogIfEmpty(resolution.user, resolution.isFirstBootstrap);
-        await seedStarterBlogsOnce(resolution.user);
-        const privateData = await loadPortalPrivateData(resolution.user);
-        if (!cancelled) {
-          setBookings(privateData.bookings);
-          setPortalUsers(privateData.users);
-        }
+        void seedInitialCatalogIfEmpty(resolution.user, resolution.isFirstBootstrap).catch(
+          (seedErr) => console.warn('Initial catalog seed skipped:', seedErr),
+        );
+        void seedStarterBlogsOnce(resolution.user);
       } catch (err) {
         if (!cancelled) {
           setActivePortalUser(null);
           setAuthError(
-            err instanceof Error
-              ? err.message
-              : 'Could not verify portal permissions in Firestore.',
+            formatPortalErrorMessage(
+              err,
+              'Could not verify portal permissions in Firestore.',
+            ),
           );
         }
       } finally {
@@ -234,6 +233,50 @@ export default function App() {
       unsubscribe();
     };
   }, []);
+
+  // Real-time multi-user sync for current user permissions, CRM bookings, and team directory
+  const activePortalUserId = activePortalUser?.id ?? null;
+  useEffect(() => {
+    if (!activePortalUserId || !activePortalUser) return;
+
+    const unsubscribe = subscribePortalPrivateData(activePortalUser, {
+      onSelfUserChange: (nextUser, revokedMessage) => {
+        if (!nextUser) {
+          setActivePortalUser(null);
+          setBookings([]);
+          setPortalUsers(INITIAL_PORTAL_USERS);
+          if (revokedMessage) {
+            setAuthError(revokedMessage);
+          }
+          void signOutPortal();
+          return;
+        }
+        setActivePortalUser((prev) => {
+          if (!prev) return nextUser;
+          const same =
+            prev.id === nextUser.id &&
+            prev.name === nextUser.name &&
+            prev.role === nextUser.role &&
+            prev.active === nextUser.active &&
+            prev.permissions.inventoryRead === nextUser.permissions.inventoryRead &&
+            prev.permissions.inventoryWrite === nextUser.permissions.inventoryWrite &&
+            prev.permissions.inventoryDelete === nextUser.permissions.inventoryDelete &&
+            prev.permissions.bookingsRead === nextUser.permissions.bookingsRead &&
+            prev.permissions.bookingsWrite === nextUser.permissions.bookingsWrite &&
+            prev.permissions.bookingsDelete === nextUser.permissions.bookingsDelete &&
+            prev.permissions.videosManage === nextUser.permissions.videosManage &&
+            prev.permissions.usersManage === nextUser.permissions.usersManage;
+          return same ? prev : nextUser;
+        });
+      },
+      onBookings: (nextBookings) => setBookings(nextBookings),
+      onUsers: (nextUsers) => setPortalUsers(nextUsers),
+    });
+
+    return () => unsubscribe();
+    // Subscribe/rebind only when signed-in user identity changes; self-doc listener dynamically starts/stops sub-listeners
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activePortalUserId]);
 
   const navigate = useCallback((nextRoute: AppRoute) => {
     if (window.location.pathname !== nextRoute || window.location.hash) {
@@ -437,6 +480,23 @@ export default function App() {
     setAuthError(null);
   };
 
+  const handleSwitchAccount = async () => {
+    setAuthError(null);
+    try {
+      await signInPortalWithGoogle();
+    } catch (err) {
+      const code = (err as { code?: string })?.code || '';
+      if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
+        return;
+      }
+      setAuthError(
+        err instanceof Error && err.message
+          ? err.message
+          : 'Could not switch Google account. Please try again.',
+      );
+    }
+  };
+
   if (route === '/portal') {
     return (
       <SellerPortal
@@ -445,6 +505,7 @@ export default function App() {
         authError={authError}
         onClearAuthError={() => setAuthError(null)}
         onSignOut={handleSignOut}
+        onSwitchAccount={handleSwitchAccount}
         vehicles={vehicles}
         bookings={bookings}
         videos={videos}

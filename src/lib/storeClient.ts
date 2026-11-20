@@ -599,6 +599,169 @@ export async function seedInitialCatalogIfEmpty(
   }
 }
 
+export function formatPortalErrorMessage(err: unknown, fallback: string): string {
+  if (!(err instanceof Error) || !err.message) return fallback;
+  try {
+    const parsed = JSON.parse(err.message) as {
+      error?: string;
+      operationType?: string;
+      path?: string | null;
+      authInfo?: { email?: string | null };
+    };
+    if (parsed && typeof parsed.error === 'string') {
+      if (parsed.error.toLowerCase().includes('missing or insufficient permissions')) {
+        const who = parsed.authInfo?.email ? ` for ${parsed.authInfo.email}` : '';
+        const target = parsed.path ? ` on ${parsed.path}` : '';
+        return `Permission denied${who}${target}. Confirm this account is active and has the required role permissions in Team & Users.`;
+      }
+      return parsed.error;
+    }
+  } catch {
+    // Not a JSON FirestoreErrorInfo payload
+  }
+  return err.message;
+}
+
+export function subscribePortalPrivateData(
+  user: PortalUser,
+  callbacks: {
+    onSelfUserChange: (nextUser: PortalUser | null, revokedMessage?: string) => void;
+    onBookings: (bookings: BookingRequest[]) => void;
+    onUsers: (users: PortalUser[]) => void;
+  },
+): Unsubscribe {
+  let active = true;
+  let unsubBookings: Unsubscribe | null = null;
+  let unsubUsers: Unsubscribe | null = null;
+
+  const stopBookings = () => {
+    if (unsubBookings) {
+      unsubBookings();
+      unsubBookings = null;
+    }
+  };
+
+  const stopUsers = () => {
+    if (unsubUsers) {
+      unsubUsers();
+      unsubUsers = null;
+    }
+  };
+
+  const startBookings = () => {
+    if (unsubBookings) return;
+    unsubBookings = onSnapshot(
+      collection(db, 'bookings'),
+      (snapshot) => {
+        if (!active) return;
+        const list = snapshot.docs
+          .map((d) => docToBooking(d.data() as Record<string, unknown>, d.id))
+          .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+        callbacks.onBookings(list);
+      },
+      (error) => {
+        if (!active) return;
+        handleFirestoreError(error, OperationType.GET, 'bookings');
+      },
+    );
+  };
+
+  const startUsers = () => {
+    if (unsubUsers) return;
+    unsubUsers = onSnapshot(
+      collection(db, 'portalUsers'),
+      (snapshot) => {
+        if (!active) return;
+        const list = snapshot.docs
+          .map((d) => docToPortalUser(d.data() as Record<string, unknown>, d.id))
+          .sort((a, b) => {
+            if (Boolean(a.isPrimaryOwner) !== Boolean(b.isPrimaryOwner)) {
+              return a.isPrimaryOwner ? -1 : 1;
+            }
+            return a.name.localeCompare(b.name);
+          });
+        callbacks.onUsers(list);
+      },
+      (error) => {
+        if (!active) return;
+        handleFirestoreError(error, OperationType.GET, 'portalUsers');
+      },
+    );
+  };
+
+  if (user.permissions.bookingsRead) {
+    startBookings();
+  } else {
+    callbacks.onBookings([]);
+  }
+
+  if (user.permissions.usersManage) {
+    startUsers();
+  } else {
+    callbacks.onUsers([user]);
+  }
+
+  const unsubSelf = onSnapshot(
+    doc(db, 'portalUsers', user.id),
+    (snapshot) => {
+      if (!active) return;
+      if (!snapshot.exists()) {
+        if (!user.isPrimaryOwner) {
+          stopBookings();
+          stopUsers();
+          callbacks.onSelfUserChange(
+            null,
+            'Your portal access was removed by a Portal Admin.',
+          );
+        }
+        return;
+      }
+
+      const nextUser = docToPortalUser(
+        snapshot.data() as Record<string, unknown>,
+        snapshot.id,
+      );
+
+      if (!nextUser.active && !nextUser.isPrimaryOwner) {
+        stopBookings();
+        stopUsers();
+        callbacks.onSelfUserChange(
+          null,
+          'This user account has been deactivated. Contact a Portal Admin to re-enable access.',
+        );
+        return;
+      }
+
+      if (nextUser.permissions.bookingsRead) {
+        startBookings();
+      } else {
+        stopBookings();
+        callbacks.onBookings([]);
+      }
+
+      if (nextUser.permissions.usersManage) {
+        startUsers();
+      } else {
+        stopUsers();
+        callbacks.onUsers([nextUser]);
+      }
+
+      callbacks.onSelfUserChange(nextUser);
+    },
+    (error) => {
+      if (!active) return;
+      handleFirestoreError(error, OperationType.GET, `portalUsers/${user.id}`);
+    },
+  );
+
+  return () => {
+    active = false;
+    unsubSelf();
+    stopBookings();
+    stopUsers();
+  };
+}
+
 export async function loadPortalPrivateData(user: PortalUser): Promise<{
   bookings: BookingRequest[];
   users: PortalUser[];
@@ -660,12 +823,11 @@ export async function updateVehicleRecord(
   const path = `vehicles/${id}`;
   try {
     const ref = doc(db, 'vehicles', id);
-    let existing = currentVehicle;
-    if (!existing) {
-      const snap = await getDoc(ref);
-      if (!snap.exists()) return null;
-      existing = docToVehicle(snap.data() as Record<string, unknown>, snap.id);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) {
+      throw new Error('This vehicle was deleted or is no longer available.');
     }
+    const existing = docToVehicle(snap.data() as Record<string, unknown>, snap.id) || currentVehicle;
 
     const mergedTransit = updates.transit
       ? { ...existing.transit, ...updates.transit }
@@ -710,6 +872,9 @@ export async function updateVehicleRecord(
       inspection: payload.inspection as ExportVehicle['inspection'],
     };
   } catch (error) {
+    if (error instanceof Error && error.message.includes('no longer available')) {
+      throw error;
+    }
     handleFirestoreError(error, OperationType.UPDATE, path);
   }
 }
@@ -719,7 +884,22 @@ export async function updateVehicleStatusRecord(
   status: VehicleStatus,
   currentVehicle?: ExportVehicle,
 ): Promise<ExportVehicle | null> {
-  return updateVehicleRecord(id, { status }, currentVehicle);
+  const path = `vehicles/${id}`;
+  try {
+    const ref = doc(db, 'vehicles', id);
+    await updateDoc(ref, {
+      status,
+      updatedAt: serverTimestamp(),
+    });
+    if (currentVehicle) {
+      return { ...currentVehicle, status };
+    }
+    const snap = await getDoc(ref);
+    if (!snap.exists()) return null;
+    return docToVehicle(snap.data() as Record<string, unknown>, snap.id);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+  }
 }
 
 export async function deleteVehicleRecord(id: string): Promise<void> {
@@ -1049,7 +1229,14 @@ export async function seedStarterBlogsOnce(user: PortalUser): Promise<void> {
     });
     await batch.commit();
   } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, 'blogs');
+    // Tolerate concurrent seeding races between two team members logging in simultaneously
+    try {
+      const recheckFlag = await getDoc(doc(db, 'systemFlags', 'blogsSeeded'));
+      if (recheckFlag.exists()) return;
+    } catch {
+      // Fall through to structured error log
+    }
+    console.warn('Non-fatal starter blog seed check:', error);
   }
 }
 

@@ -9,6 +9,7 @@ import {
   UserX,
 } from 'lucide-react';
 import { createPermissionsForRole } from '../lib/portalRoles.ts';
+import { formatPortalErrorMessage } from '../lib/storeClient.ts';
 import type { PortalPermissions, PortalRole, PortalUser } from '../types/autoTrade.ts';
 
 interface PortalUsersPanelProps {
@@ -245,7 +246,7 @@ export function PortalUsersPanel({
         );
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save user.');
+      setError(formatPortalErrorMessage(err, 'Failed to save user.'));
     } finally {
       setSaving(false);
     }

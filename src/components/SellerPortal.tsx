@@ -32,6 +32,7 @@ import {
   getVehicleImages,
 } from '../data/seedInventory.ts';
 import { readPortalDarkMode, writePortalDarkMode } from '../lib/portalTheme.ts';
+import { formatPortalErrorMessage } from '../lib/storeClient.ts';
 import type {
   BlogPost,
   BookingRequest,
@@ -65,6 +66,7 @@ interface SellerPortalProps {
   authError: string | null;
   onClearAuthError: () => void;
   onSignOut: () => Promise<void>;
+  onSwitchAccount: () => Promise<void>;
   vehicles: ExportVehicle[];
   bookings: BookingRequest[];
   videos: UnloadingVideo[];
@@ -118,15 +120,25 @@ async function compressImageFile(file: File): Promise<string> {
         const canvas = document.createElement('canvas');
         const maxWidth = 800;
         const scale = Math.min(1, maxWidth / img.width);
-        canvas.width = Math.round(img.width * scale);
-        canvas.height = Math.round(img.height * scale);
+        canvas.width = Math.max(1, Math.round(img.width * scale));
+        canvas.height = Math.max(1, Math.round(img.height * scale));
         const ctx = canvas.getContext('2d');
         if (!ctx) {
           reject(new Error('Canvas not supported'));
           return;
         }
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        resolve(canvas.toDataURL('image/jpeg', 0.72));
+        let quality = 0.72;
+        let dataUrl = canvas.toDataURL('image/jpeg', quality);
+        while (dataUrl.length > 330000 && quality > 0.35) {
+          quality -= 0.12;
+          dataUrl = canvas.toDataURL('image/jpeg', quality);
+        }
+        if (dataUrl.length > 345000) {
+          reject(new Error('Compressed image exceeds cloud size limit. Please choose a smaller photo.'));
+          return;
+        }
+        resolve(dataUrl);
       };
       img.onerror = () => reject(new Error('Invalid image file'));
       img.src = reader.result as string;
@@ -142,6 +154,7 @@ export function SellerPortal({
   authError,
   onClearAuthError,
   onSignOut,
+  onSwitchAccount,
   vehicles,
   bookings,
   videos,
@@ -171,6 +184,7 @@ export function SellerPortal({
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [editingVehicleId, setEditingVehicleId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [modeFilter, setModeFilter] = useState<'all' | ListingMode>('all');
@@ -201,7 +215,7 @@ export function SellerPortal({
       }
       setDeleteTarget(null);
     } catch (err) {
-      setDeleteError(err instanceof Error ? err.message : 'Could not complete deletion.');
+      setDeleteError(formatPortalErrorMessage(err, 'Could not complete deletion.'));
     } finally {
       setIsDeleting(false);
     }
@@ -312,8 +326,16 @@ export function SellerPortal({
   const handleSaveCrmNote = async (leadId: string, fallbackNote: string) => {
     const draft = crmNotesDrafts[leadId] ?? fallbackNote;
     setSavingNoteId(leadId);
+    setActionError(null);
     try {
       await onUpdateBooking(leadId, { crmNotes: draft.trim() });
+      setCrmNotesDrafts((prev) => {
+        const next = { ...prev };
+        delete next[leadId];
+        return next;
+      });
+    } catch (err) {
+      setActionError(formatPortalErrorMessage(err, 'Could not save CRM note.'));
     } finally {
       setSavingNoteId(null);
     }
@@ -323,6 +345,7 @@ export function SellerPortal({
     e.preventDefault();
     if (!manualName.trim() || !manualEmail.trim()) return;
     setManualLeadSaving(true);
+    setActionError(null);
     try {
       const port = DESTINATION_PORTS.find((p) => p.id === manualPortId) ?? DESTINATION_PORTS[0];
       await onCreateManualLead({
@@ -346,6 +369,8 @@ export function SellerPortal({
       setManualVehicleTitle('');
       setManualNotes('');
       setShowManualLeadForm(false);
+    } catch (err) {
+      setActionError(formatPortalErrorMessage(err, 'Could not create manual lead.'));
     } finally {
       setManualLeadSaving(false);
     }
@@ -632,7 +657,7 @@ export function SellerPortal({
       resetFormForNew();
       setActiveTab('inventory');
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : 'Failed to save vehicle.');
+      setFormError(formatPortalErrorMessage(err, 'Failed to save vehicle.'));
     } finally {
       setSaving(false);
     }
@@ -879,14 +904,25 @@ export function SellerPortal({
             <span>Back to Public Storefront</span>
           </button>
 
-          <button
-            type="button"
-            onClick={() => void onSignOut()}
-            className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 text-xs font-medium text-slate-600 dark:text-zinc-400 hover:text-red-700 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-lg transition-colors cursor-pointer"
-          >
-            <LogOut className="w-3.5 h-3.5" aria-hidden="true" />
-            <span>Sign Out</span>
-          </button>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => void onSwitchAccount()}
+              className="inline-flex items-center justify-center gap-1.5 px-2.5 py-2 text-xs font-medium text-blue-900 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/40 hover:bg-blue-100 dark:hover:bg-blue-950/70 rounded-lg transition-colors cursor-pointer"
+            >
+              <Users className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+              <span>Switch</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => void onSignOut()}
+              className="inline-flex items-center justify-center gap-1.5 px-2.5 py-2 text-xs font-medium text-slate-600 dark:text-zinc-400 hover:text-red-700 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-lg transition-colors cursor-pointer"
+            >
+              <LogOut className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+              <span>Sign Out</span>
+            </button>
+          </div>
         </div>
       </aside>
 
@@ -951,6 +987,23 @@ export function SellerPortal({
         </header>
 
         <div className="p-6 sm:p-8 max-w-6xl w-full mx-auto space-y-8">
+          {actionError && (
+            <div
+              role="alert"
+              className="flex items-start justify-between gap-3 text-xs text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/60 rounded-xl px-4 py-3"
+            >
+              <span>{actionError}</span>
+              <button
+                type="button"
+                onClick={() => setActionError(null)}
+                aria-label="Dismiss error"
+                className="p-0.5 text-red-600 dark:text-red-300 hover:opacity-75 cursor-pointer shrink-0"
+              >
+                <X className="w-3.5 h-3.5" aria-hidden="true" />
+              </button>
+            </div>
+          )}
+
           {/* KPI Summary Strip */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl p-5">
@@ -1130,7 +1183,8 @@ export function SellerPortal({
                                               : nextStage === 'Customs Clearing'
                                                 ? `B/L Endorsed · Customs Clearing at ${portShort}`
                                                 : `Cleared · Ready for Pickup at ${portShort}`;
-                                        onUpdateVehicle(vehicle.id, {
+                                        setActionError(null);
+                                        void onUpdateVehicle(vehicle.id, {
                                           status:
                                             nextStage === 'Ready for Pickup'
                                               ? 'Available'
@@ -1142,7 +1196,14 @@ export function SellerPortal({
                                             trackingStage: nextStage,
                                             arrivalStatus: stageNote,
                                           },
-                                        });
+                                        }).catch((err) =>
+                                          setActionError(
+                                            formatPortalErrorMessage(
+                                              err,
+                                              'Failed to update port tracking stage.',
+                                            ),
+                                          ),
+                                        );
                                       }}
                                       className="w-full px-2 py-1 text-[11px] font-medium rounded border border-blue-200 dark:border-blue-800 bg-blue-50/70 dark:bg-blue-950/60 text-blue-900 dark:text-blue-200 cursor-pointer"
                                     >
@@ -1173,12 +1234,20 @@ export function SellerPortal({
                                 <select
                                   aria-label={`Status for ${vehicle.makeModel}`}
                                   value={vehicle.status}
-                                  onChange={(e) =>
-                                    onUpdateVehicleStatus(
+                                  onChange={(e) => {
+                                    setActionError(null);
+                                    void onUpdateVehicleStatus(
                                       vehicle.id,
                                       e.target.value as VehicleStatus,
-                                    )
-                                  }
+                                    ).catch((err) =>
+                                      setActionError(
+                                        formatPortalErrorMessage(
+                                          err,
+                                          'Failed to update vehicle status.',
+                                        ),
+                                      ),
+                                    );
+                                  }}
                                   className="px-2.5 py-1.5 text-xs font-medium rounded-md border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-950 dark:text-zinc-100"
                                 >
                                   <option value="Available">Available</option>
@@ -2244,11 +2313,19 @@ export function SellerPortal({
                                 <select
                                   aria-label={`CRM stage for ${lead.buyerName}`}
                                   value={lead.status}
-                                  onChange={(e) =>
-                                    onUpdateBooking(lead.id, {
+                                  onChange={(e) => {
+                                    setActionError(null);
+                                    void onUpdateBooking(lead.id, {
                                       status: e.target.value as BookingRequest['status'],
-                                    })
-                                  }
+                                    }).catch((err) =>
+                                      setActionError(
+                                        formatPortalErrorMessage(
+                                          err,
+                                          'Failed to update lead pipeline stage.',
+                                        ),
+                                      ),
+                                    );
+                                  }}
                                   className="w-full px-3 py-2 text-xs font-medium rounded-lg border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-950 dark:text-zinc-100"
                                 >
                                   <option value="Pending Review">Pending Review</option>

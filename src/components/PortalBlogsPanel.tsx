@@ -13,7 +13,7 @@ import {
   Upload,
 } from 'lucide-react';
 import { BLOG_COVER_PRESETS } from '../data/seedBlogs.ts';
-import { slugifyBlogTitle } from '../lib/storeClient.ts';
+import { formatPortalErrorMessage, slugifyBlogTitle } from '../lib/storeClient.ts';
 import type { BlogCategory, BlogPost, BlogStatus } from '../types/autoTrade.ts';
 import { ResilientImage } from './ResilientImage';
 
@@ -222,7 +222,7 @@ export function PortalBlogsPanel({
         resetForm();
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to save blog post.');
+      setError(formatPortalErrorMessage(err, 'Unable to save blog post.'));
     } finally {
       setSaving(false);
     }
@@ -234,7 +234,7 @@ export function PortalBlogsPanel({
       await onUpdateBlog(post.id, { status: nextStatus });
       setNotice(`"${post.title}" moved to ${nextStatus}.`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to update post status.');
+      setError(formatPortalErrorMessage(err, 'Unable to update post status.'));
     }
   };
 

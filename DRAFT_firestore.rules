@@ -55,6 +55,10 @@ service cloud.firestore {
       return emailKeyFor(request.auth.token.email);
     }
 
+    function portalUserPathFor(userKey) {
+      return /databases/$(database)/documents/portalUsers/$(userKey);
+    }
+
     function isPrimaryOwner() {
       return isVerifiedUser() && requesterEmail() == 'naseebsaleemvmi@gmail.com';
     }
@@ -62,119 +66,164 @@ service cloud.firestore {
     function isActiveUserDoc(u) {
       return u is map &&
         u.active == true &&
-        u.email == requesterEmail() &&
+        u.email is string &&
+        u.email.lower() == requesterEmail() &&
         u.permissions is map;
     }
 
     function userIsPortalAdmin(u) {
-      return isActiveUserDoc(u) && u.role == 'Admin' && u.permissions.usersManage == true;
+      return isActiveUserDoc(u) &&
+        u.role == 'Admin' &&
+        'usersManage' in u.permissions &&
+        u.permissions.usersManage == true;
     }
 
     function userCanWriteInventory(u) {
-      return isActiveUserDoc(u) && u.permissions.inventoryWrite == true;
+      return isActiveUserDoc(u) &&
+        'inventoryWrite' in u.permissions &&
+        u.permissions.inventoryWrite == true;
     }
 
     function userCanDeleteInventory(u) {
-      return isActiveUserDoc(u) && u.permissions.inventoryDelete == true;
+      return isActiveUserDoc(u) &&
+        'inventoryDelete' in u.permissions &&
+        u.permissions.inventoryDelete == true;
     }
 
     function userCanReadBookings(u) {
-      return isActiveUserDoc(u) && u.permissions.bookingsRead == true;
+      return isActiveUserDoc(u) &&
+        'bookingsRead' in u.permissions &&
+        u.permissions.bookingsRead == true;
     }
 
     function userCanWriteBookings(u) {
-      return isActiveUserDoc(u) && u.permissions.bookingsWrite == true;
+      return isActiveUserDoc(u) &&
+        'bookingsWrite' in u.permissions &&
+        u.permissions.bookingsWrite == true;
     }
 
     function userCanDeleteBookings(u) {
-      return isActiveUserDoc(u) && u.permissions.bookingsDelete == true;
+      return isActiveUserDoc(u) &&
+        'bookingsDelete' in u.permissions &&
+        u.permissions.bookingsDelete == true;
     }
 
     function userCanManageVideos(u) {
-      return isActiveUserDoc(u) && u.permissions.videosManage == true;
+      return isActiveUserDoc(u) &&
+        'videosManage' in u.permissions &&
+        u.permissions.videosManage == true;
     }
 
     function userCanManageUsers(u) {
-      return isActiveUserDoc(u) && u.permissions.usersManage == true;
+      return isActiveUserDoc(u) &&
+        'usersManage' in u.permissions &&
+        u.permissions.usersManage == true;
     }
 
     function userCanManageBlogs(u) {
       return isActiveUserDoc(u) && (
-        u.permissions.inventoryWrite == true ||
-        u.permissions.videosManage == true ||
-        u.permissions.usersManage == true
+        ('inventoryWrite' in u.permissions && u.permissions.inventoryWrite == true) ||
+        ('videosManage' in u.permissions && u.permissions.videosManage == true) ||
+        ('usersManage' in u.permissions && u.permissions.usersManage == true)
       );
+    }
+
+    function hasPortalAdminAt(userPath) {
+      return exists(userPath) && userIsPortalAdmin(get(userPath).data);
+    }
+
+    function hasWriteInventoryAt(userPath) {
+      return exists(userPath) && userCanWriteInventory(get(userPath).data);
+    }
+
+    function hasDeleteInventoryAt(userPath) {
+      return exists(userPath) && userCanDeleteInventory(get(userPath).data);
+    }
+
+    function hasReadBookingsAt(userPath) {
+      return exists(userPath) && userCanReadBookings(get(userPath).data);
+    }
+
+    function hasWriteBookingsAt(userPath) {
+      return exists(userPath) && userCanWriteBookings(get(userPath).data);
+    }
+
+    function hasDeleteBookingsAt(userPath) {
+      return exists(userPath) && userCanDeleteBookings(get(userPath).data);
+    }
+
+    function hasManageVideosAt(userPath) {
+      return exists(userPath) && userCanManageVideos(get(userPath).data);
+    }
+
+    function hasManageUsersAt(userPath) {
+      return exists(userPath) && userCanManageUsers(get(userPath).data);
+    }
+
+    function hasManageBlogsAt(userPath) {
+      return exists(userPath) && userCanManageBlogs(get(userPath).data);
     }
 
     function isPortalAdmin() {
       return isPrimaryOwner() || (
         isVerifiedUser() &&
-        exists(/databases/$(database)/documents/portalUsers/$(requesterEmailKey())) &&
-        userIsPortalAdmin(get(/databases/$(database)/documents/portalUsers/$(requesterEmailKey())).data)
+        hasPortalAdminAt(portalUserPathFor(requesterEmailKey()))
       );
     }
 
     function canWriteInventory() {
       return isPrimaryOwner() || (
         isVerifiedUser() &&
-        exists(/databases/$(database)/documents/portalUsers/$(requesterEmailKey())) &&
-        userCanWriteInventory(get(/databases/$(database)/documents/portalUsers/$(requesterEmailKey())).data)
+        hasWriteInventoryAt(portalUserPathFor(requesterEmailKey()))
       );
     }
 
     function canDeleteInventory() {
       return isPrimaryOwner() || (
         isVerifiedUser() &&
-        exists(/databases/$(database)/documents/portalUsers/$(requesterEmailKey())) &&
-        userCanDeleteInventory(get(/databases/$(database)/documents/portalUsers/$(requesterEmailKey())).data)
+        hasDeleteInventoryAt(portalUserPathFor(requesterEmailKey()))
       );
     }
 
     function canReadBookings() {
       return isPrimaryOwner() || (
         isVerifiedUser() &&
-        exists(/databases/$(database)/documents/portalUsers/$(requesterEmailKey())) &&
-        userCanReadBookings(get(/databases/$(database)/documents/portalUsers/$(requesterEmailKey())).data)
+        hasReadBookingsAt(portalUserPathFor(requesterEmailKey()))
       );
     }
 
     function canWriteBookings() {
       return isPrimaryOwner() || (
         isVerifiedUser() &&
-        exists(/databases/$(database)/documents/portalUsers/$(requesterEmailKey())) &&
-        userCanWriteBookings(get(/databases/$(database)/documents/portalUsers/$(requesterEmailKey())).data)
+        hasWriteBookingsAt(portalUserPathFor(requesterEmailKey()))
       );
     }
 
     function canDeleteBookings() {
       return isPrimaryOwner() || (
         isVerifiedUser() &&
-        exists(/databases/$(database)/documents/portalUsers/$(requesterEmailKey())) &&
-        userCanDeleteBookings(get(/databases/$(database)/documents/portalUsers/$(requesterEmailKey())).data)
+        hasDeleteBookingsAt(portalUserPathFor(requesterEmailKey()))
       );
     }
 
     function canManageVideos() {
       return isPrimaryOwner() || (
         isVerifiedUser() &&
-        exists(/databases/$(database)/documents/portalUsers/$(requesterEmailKey())) &&
-        userCanManageVideos(get(/databases/$(database)/documents/portalUsers/$(requesterEmailKey())).data)
+        hasManageVideosAt(portalUserPathFor(requesterEmailKey()))
       );
     }
 
     function canManageUsers() {
       return isPrimaryOwner() || (
         isVerifiedUser() &&
-        exists(/databases/$(database)/documents/portalUsers/$(requesterEmailKey())) &&
-        userCanManageUsers(get(/databases/$(database)/documents/portalUsers/$(requesterEmailKey())).data)
+        hasManageUsersAt(portalUserPathFor(requesterEmailKey()))
       );
     }
 
     function canManageBlogs() {
       return isPrimaryOwner() || (
         isVerifiedUser() &&
-        exists(/databases/$(database)/documents/portalUsers/$(requesterEmailKey())) &&
-        userCanManageBlogs(get(/databases/$(database)/documents/portalUsers/$(requesterEmailKey())).data)
+        hasManageBlogsAt(portalUserPathFor(requesterEmailKey()))
       );
     }
 
