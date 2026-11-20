@@ -5,7 +5,6 @@ import express, { type NextFunction, type Request, type Response } from 'express
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { createServer as createViteServer } from 'vite';
 import { INITIAL_BLOG_POSTS } from './src/data/seedBlogs.ts';
 import {
   DESTINATION_PORTS,
@@ -34,7 +33,25 @@ import type {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const DATA_DIR = path.resolve(__dirname, 'data');
+const BUNDLED_DATA_DIR = path.resolve(__dirname, 'data');
+const BUNDLED_STORE_PATH = path.join(BUNDLED_DATA_DIR, 'store.json');
+
+function resolveWritableDataDir(): string {
+  if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {
+    return '/tmp/pjs-ventures-data';
+  }
+  try {
+    if (!fs.existsSync(BUNDLED_DATA_DIR)) {
+      fs.mkdirSync(BUNDLED_DATA_DIR, { recursive: true });
+    }
+    fs.accessSync(BUNDLED_DATA_DIR, fs.constants.W_OK);
+    return BUNDLED_DATA_DIR;
+  } catch {
+    return '/tmp/pjs-ventures-data';
+  }
+}
+
+const DATA_DIR = resolveWritableDataDir();
 const STORE_PATH = path.join(DATA_DIR, 'store.json');
 const SESSION_SECRET_PATH = path.join(DATA_DIR, '.session-secret');
 
@@ -55,6 +72,18 @@ type SyncScope = 'vehicles' | 'bookings' | 'videos' | 'blogs' | 'users';
 function getSessionSecret(): string {
   const fromEnv = process.env.PORTAL_SESSION_SECRET?.trim();
   if (fromEnv && fromEnv.length >= 16) return fromEnv;
+
+  if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {
+    const scope =
+      process.env.VERCEL_PROJECT_PRODUCTION_URL ||
+      process.env.VERCEL_URL ||
+      'pjs-ventures-vercel';
+    return crypto
+      .createHash('sha256')
+      .update(`${scope}:pjs-ventures-portal-session-v1`)
+      .digest('hex');
+  }
+
   try {
     if (!fs.existsSync(DATA_DIR)) {
       fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -67,7 +96,10 @@ function getSessionSecret(): string {
     fs.writeFileSync(SESSION_SECRET_PATH, generated, 'utf-8');
     return generated;
   } catch {
-    return crypto.createHash('sha256').update(`${__dirname}:pjs-ventures-fallback-secret`).digest('hex');
+    return crypto
+      .createHash('sha256')
+      .update(`${__dirname}:pjs-ventures-fallback-secret`)
+      .digest('hex');
   }
 }
 
@@ -221,22 +253,44 @@ function migrateStoredUsers(rawUsersInput: unknown): {
   return { users, changed };
 }
 
+function writeStore(data: StoreData): void {
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+    fs.writeFileSync(STORE_PATH, JSON.stringify(data, null, 2), 'utf-8');
+  } catch (err) {
+    console.warn('Could not persist store to disk:', err);
+  }
+}
+
 function readStore(): StoreData {
   try {
     if (!fs.existsSync(DATA_DIR)) {
       fs.mkdirSync(DATA_DIR, { recursive: true });
     }
     if (!fs.existsSync(STORE_PATH)) {
-      const { users } = migrateStoredUsers(INITIAL_PORTAL_USERS);
-      const initial: StoreData = {
-        vehicles: INITIAL_VEHICLES,
-        bookings: INITIAL_BOOKINGS,
-        videos: INITIAL_UNLOADING_VIDEOS,
-        blogs: INITIAL_BLOG_POSTS,
-        users,
-      };
-      fs.writeFileSync(STORE_PATH, JSON.stringify(initial, null, 2), 'utf-8');
-      return initial;
+      // Seed from bundled data/store.json if running from an alternate writable path (e.g. /tmp)
+      if (STORE_PATH !== BUNDLED_STORE_PATH && fs.existsSync(BUNDLED_STORE_PATH)) {
+        try {
+          const bundledRaw = fs.readFileSync(BUNDLED_STORE_PATH, 'utf-8');
+          fs.writeFileSync(STORE_PATH, bundledRaw, 'utf-8');
+        } catch {
+          // Fall through to seed defaults
+        }
+      }
+      if (!fs.existsSync(STORE_PATH)) {
+        const { users } = migrateStoredUsers(INITIAL_PORTAL_USERS);
+        const initial: StoreData = {
+          vehicles: INITIAL_VEHICLES,
+          bookings: INITIAL_BOOKINGS,
+          videos: INITIAL_UNLOADING_VIDEOS,
+          blogs: INITIAL_BLOG_POSTS,
+          users,
+        };
+        writeStore(initial);
+        return initial;
+      }
     }
     const raw = fs.readFileSync(STORE_PATH, 'utf-8');
     const parsed = JSON.parse(raw) as Partial<StoreData>;
@@ -250,7 +304,7 @@ function readStore(): StoreData {
       users,
     };
     if (usersChanged || blogsMissing) {
-      fs.writeFileSync(STORE_PATH, JSON.stringify(store, null, 2), 'utf-8');
+      writeStore(store);
     }
     return store;
   } catch {
@@ -263,13 +317,6 @@ function readStore(): StoreData {
       users,
     };
   }
-}
-
-function writeStore(data: StoreData): void {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-  }
-  fs.writeFileSync(STORE_PATH, JSON.stringify(data, null, 2), 'utf-8');
 }
 
 function extractBearerToken(req: Request): string | null {
@@ -286,18 +333,27 @@ function resolveAuthenticatedUser(req: Request): {
 } {
   const token = extractBearerToken(req);
   if (!token) {
-    return { user: null, error: { status: 401, message: 'Authentication required. Please sign in to the Seller Portal.' } };
+    return {
+      user: null,
+      error: { status: 401, message: 'Authentication required. Please sign in to the Seller Portal.' },
+    };
   }
   const payload = verifySessionToken(token);
   if (!payload) {
-    return { user: null, error: { status: 401, message: 'Session expired or invalid. Please sign in again.' } };
+    return {
+      user: null,
+      error: { status: 401, message: 'Session expired or invalid. Please sign in again.' },
+    };
   }
   const store = readStore();
   const user = store.users.find(
     (u) => u.id === payload.userId || u.email.toLowerCase() === payload.email.toLowerCase(),
   );
   if (!user) {
-    return { user: null, error: { status: 401, message: 'Your portal access was removed by an Admin.' } };
+    return {
+      user: null,
+      error: { status: 401, message: 'Your portal access was removed by an Admin.' },
+    };
   }
   if (!user.active && !user.isPrimaryOwner) {
     return {
@@ -336,9 +392,8 @@ function canManageBlogsForUser(user: StoredPortalUser): boolean {
   );
 }
 
-async function startServer() {
+export function createApiApp(): express.Express {
   const app = express();
-  const PORT = Number(process.env.PORT) || 3000;
 
   app.use(express.json({ limit: '15mb' }));
 
@@ -361,6 +416,13 @@ async function startServer() {
     res.setHeader('Cache-Control', 'no-cache, no-transform');
     res.setHeader('Connection', 'keep-alive');
     res.flushHeaders?.();
+
+    if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {
+      res.write(`retry: 15000\ndata: ${JSON.stringify({ type: 'connected', ts: Date.now() })}\n\n`);
+      res.end();
+      return;
+    }
+
     res.write(`data: ${JSON.stringify({ type: 'connected', ts: Date.now() })}\n\n`);
 
     sseClients.add(res);
@@ -1182,8 +1244,16 @@ A Port Balance-Release unit is already shipped or docked after a prior buyer pai
     res.json({ deletedId: id });
   });
 
+  return app;
+}
+
+async function startServer() {
+  const app = createApiApp();
+  const PORT = Number(process.env.PORT) || 3000;
+
   // Vite middleware in dev, static dist in production
   if (process.env.NODE_ENV !== 'production') {
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
@@ -1202,4 +1272,12 @@ A Port Balance-Release unit is already shipped or docked after a prior buyer pai
   });
 }
 
-startServer();
+const isDirectEntry =
+  typeof process !== 'undefined' &&
+  Array.isArray(process.argv) &&
+  Boolean(process.argv[1]) &&
+  path.resolve(process.argv[1]) === path.resolve(__filename);
+
+if (isDirectEntry && !process.env.VERCEL && !process.env.AWS_LAMBDA_FUNCTION_NAME) {
+  void startServer();
+}

@@ -33,6 +33,11 @@ async function parseAuthJson<T>(res: Response): Promise<T> {
     data = {};
   }
   if (!res.ok) {
+    if (res.status === 405) {
+      throw new Error(
+        'Backend API route returned 405 Method Not Allowed. Ensure /api/* routes are handled by Express/serverless functions rather than rewritten to index.html.',
+      );
+    }
     const msg =
       typeof data.error === 'string' && data.error.trim().length > 0
         ? data.error
