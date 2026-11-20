@@ -55,176 +55,88 @@ service cloud.firestore {
       return emailKeyFor(request.auth.token.email);
     }
 
-    function portalUserPathFor(userKey) {
-      return /databases/$(database)/documents/portalUsers/$(userKey);
-    }
-
     function isPrimaryOwner() {
       return isVerifiedUser() && requesterEmail() == 'naseebsaleemvmi@gmail.com';
     }
 
     function isActiveUserDoc(u) {
       return u is map &&
-        u.active == true &&
-        u.email is string &&
-        u.email.lower() == requesterEmail() &&
-        u.permissions is map;
+        u.get('active', false) == true &&
+        u.get('email', '') is string &&
+        u.get('email', '').lower() == requesterEmail() &&
+        u.get('permissions', {}) is map;
     }
 
-    function userIsPortalAdmin(u) {
+    function userHasPerm(u, permKey) {
+      return isActiveUserDoc(u) && u.permissions.get(permKey, false) == true;
+    }
+
+    function userIsAdminDoc(u) {
       return isActiveUserDoc(u) &&
-        u.role == 'Admin' &&
-        'usersManage' in u.permissions &&
-        u.permissions.usersManage == true;
+        u.get('role', '') == 'Admin' &&
+        u.permissions.get('usersManage', false) == true;
     }
 
-    function userCanWriteInventory(u) {
-      return isActiveUserDoc(u) &&
-        'inventoryWrite' in u.permissions &&
-        u.permissions.inventoryWrite == true;
-    }
-
-    function userCanDeleteInventory(u) {
-      return isActiveUserDoc(u) &&
-        'inventoryDelete' in u.permissions &&
-        u.permissions.inventoryDelete == true;
-    }
-
-    function userCanReadBookings(u) {
-      return isActiveUserDoc(u) &&
-        'bookingsRead' in u.permissions &&
-        u.permissions.bookingsRead == true;
-    }
-
-    function userCanWriteBookings(u) {
-      return isActiveUserDoc(u) &&
-        'bookingsWrite' in u.permissions &&
-        u.permissions.bookingsWrite == true;
-    }
-
-    function userCanDeleteBookings(u) {
-      return isActiveUserDoc(u) &&
-        'bookingsDelete' in u.permissions &&
-        u.permissions.bookingsDelete == true;
-    }
-
-    function userCanManageVideos(u) {
-      return isActiveUserDoc(u) &&
-        'videosManage' in u.permissions &&
-        u.permissions.videosManage == true;
-    }
-
-    function userCanManageUsers(u) {
-      return isActiveUserDoc(u) &&
-        'usersManage' in u.permissions &&
-        u.permissions.usersManage == true;
-    }
-
-    function userCanManageBlogs(u) {
+    function userHasBlogAccess(u) {
       return isActiveUserDoc(u) && (
-        ('inventoryWrite' in u.permissions && u.permissions.inventoryWrite == true) ||
-        ('videosManage' in u.permissions && u.permissions.videosManage == true) ||
-        ('usersManage' in u.permissions && u.permissions.usersManage == true)
+        u.permissions.get('inventoryWrite', false) == true ||
+        u.permissions.get('videosManage', false) == true ||
+        u.permissions.get('usersManage', false) == true
       );
     }
 
-    function hasPortalAdminAt(userPath) {
-      return exists(userPath) && userIsPortalAdmin(get(userPath).data);
+    function hasPortalPermission(userKey, permKey) {
+      return isVerifiedUser() &&
+        exists(/databases/$(database)/documents/portalUsers/$(userKey)) &&
+        userHasPerm(get(/databases/$(database)/documents/portalUsers/$(userKey)).data, permKey);
     }
 
-    function hasWriteInventoryAt(userPath) {
-      return exists(userPath) && userCanWriteInventory(get(userPath).data);
+    function hasPortalAdminRole(userKey) {
+      return isVerifiedUser() &&
+        exists(/databases/$(database)/documents/portalUsers/$(userKey)) &&
+        userIsAdminDoc(get(/databases/$(database)/documents/portalUsers/$(userKey)).data);
     }
 
-    function hasDeleteInventoryAt(userPath) {
-      return exists(userPath) && userCanDeleteInventory(get(userPath).data);
-    }
-
-    function hasReadBookingsAt(userPath) {
-      return exists(userPath) && userCanReadBookings(get(userPath).data);
-    }
-
-    function hasWriteBookingsAt(userPath) {
-      return exists(userPath) && userCanWriteBookings(get(userPath).data);
-    }
-
-    function hasDeleteBookingsAt(userPath) {
-      return exists(userPath) && userCanDeleteBookings(get(userPath).data);
-    }
-
-    function hasManageVideosAt(userPath) {
-      return exists(userPath) && userCanManageVideos(get(userPath).data);
-    }
-
-    function hasManageUsersAt(userPath) {
-      return exists(userPath) && userCanManageUsers(get(userPath).data);
-    }
-
-    function hasManageBlogsAt(userPath) {
-      return exists(userPath) && userCanManageBlogs(get(userPath).data);
+    function hasPortalBlogAccess(userKey) {
+      return isVerifiedUser() &&
+        exists(/databases/$(database)/documents/portalUsers/$(userKey)) &&
+        userHasBlogAccess(get(/databases/$(database)/documents/portalUsers/$(userKey)).data);
     }
 
     function isPortalAdmin() {
-      return isPrimaryOwner() || (
-        isVerifiedUser() &&
-        hasPortalAdminAt(portalUserPathFor(requesterEmailKey()))
-      );
+      return isPrimaryOwner() || hasPortalAdminRole(requesterEmailKey());
     }
 
     function canWriteInventory() {
-      return isPrimaryOwner() || (
-        isVerifiedUser() &&
-        hasWriteInventoryAt(portalUserPathFor(requesterEmailKey()))
-      );
+      return isPrimaryOwner() || hasPortalPermission(requesterEmailKey(), 'inventoryWrite');
     }
 
     function canDeleteInventory() {
-      return isPrimaryOwner() || (
-        isVerifiedUser() &&
-        hasDeleteInventoryAt(portalUserPathFor(requesterEmailKey()))
-      );
+      return isPrimaryOwner() || hasPortalPermission(requesterEmailKey(), 'inventoryDelete');
     }
 
     function canReadBookings() {
-      return isPrimaryOwner() || (
-        isVerifiedUser() &&
-        hasReadBookingsAt(portalUserPathFor(requesterEmailKey()))
-      );
+      return isPrimaryOwner() || hasPortalPermission(requesterEmailKey(), 'bookingsRead');
     }
 
     function canWriteBookings() {
-      return isPrimaryOwner() || (
-        isVerifiedUser() &&
-        hasWriteBookingsAt(portalUserPathFor(requesterEmailKey()))
-      );
+      return isPrimaryOwner() || hasPortalPermission(requesterEmailKey(), 'bookingsWrite');
     }
 
     function canDeleteBookings() {
-      return isPrimaryOwner() || (
-        isVerifiedUser() &&
-        hasDeleteBookingsAt(portalUserPathFor(requesterEmailKey()))
-      );
+      return isPrimaryOwner() || hasPortalPermission(requesterEmailKey(), 'bookingsDelete');
     }
 
     function canManageVideos() {
-      return isPrimaryOwner() || (
-        isVerifiedUser() &&
-        hasManageVideosAt(portalUserPathFor(requesterEmailKey()))
-      );
+      return isPrimaryOwner() || hasPortalPermission(requesterEmailKey(), 'videosManage');
     }
 
     function canManageUsers() {
-      return isPrimaryOwner() || (
-        isVerifiedUser() &&
-        hasManageUsersAt(portalUserPathFor(requesterEmailKey()))
-      );
+      return isPrimaryOwner() || hasPortalPermission(requesterEmailKey(), 'usersManage');
     }
 
     function canManageBlogs() {
-      return isPrimaryOwner() || (
-        isVerifiedUser() &&
-        hasManageBlogsAt(portalUserPathFor(requesterEmailKey()))
-      );
+      return isPrimaryOwner() || hasPortalBlogAccess(requesterEmailKey());
     }
 
     // ---------------------------------------------------------
