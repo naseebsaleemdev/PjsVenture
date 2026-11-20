@@ -1,4 +1,3 @@
-import { onAuthStateChanged } from 'firebase/auth';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { BlogListPage } from './components/BlogListPage';
 import { BlogPostPage } from './components/BlogPostPage';
@@ -17,8 +16,11 @@ import { TradeChatbot } from './components/TradeChatbot';
 import { VehicleDetailPage } from './components/VehicleDetailPage';
 import { INITIAL_BLOG_POSTS } from './data/seedBlogs.ts';
 import { formatAutoPrice } from './data/seedInventory.ts';
-import { auth } from './lib/firebase.ts';
-import { signInPortalWithGoogle, signOutPortal } from './lib/portalAuth.ts';
+import {
+  fetchCurrentPortalSession,
+  signInPortalWithEmailPassword,
+  signOutPortal,
+} from './lib/portalAuth.ts';
 import { INITIAL_PORTAL_USERS } from './lib/portalRoles.ts';
 import {
   createBlogRecord,
@@ -31,10 +33,6 @@ import {
   deletePortalUserRecord,
   deleteVehicleRecord,
   deleteVideoRecord,
-  formatPortalErrorMessage,
-  resolveAuthorizedPortalUser,
-  seedInitialCatalogIfEmpty,
-  seedStarterBlogsOnce,
   subscribePortalPrivateData,
   subscribePublicCatalog,
   updateBlogRecord,
@@ -98,8 +96,8 @@ export default function App() {
   const [vehicles, setVehicles] = useState<ExportVehicle[]>([]);
   const [bookings, setBookings] = useState<BookingRequest[]>([]);
   const [videos, setVideos] = useState<UnloadingVideo[]>([]);
-  const [cloudBlogs, setCloudBlogs] = useState<BlogPost[]>([]);
-  const [blogsSeededInCloud, setBlogsSeededInCloud] = useState<boolean>(false);
+  const [serverBlogs, setServerBlogs] = useState<BlogPost[]>([]);
+  const [blogsLoadedFromServer, setBlogsLoadedFromServer] = useState<boolean>(false);
   const [portalUsers, setPortalUsers] = useState<PortalUser[]>(INITIAL_PORTAL_USERS);
   const [loading, setLoading] = useState<boolean>(true);
   const [activePortalUser, setActivePortalUser] = useState<PortalUser | null>(null);
@@ -117,11 +115,11 @@ export default function App() {
   const [portsRegionFilter, setPortsRegionFilter] = useState<GlobalPortRegion | 'all'>('all');
 
   const blogs = useMemo(() => {
-    if (cloudBlogs.length > 0 || blogsSeededInCloud) {
-      return cloudBlogs;
+    if (blogsLoadedFromServer) {
+      return serverBlogs;
     }
     return INITIAL_BLOG_POSTS;
-  }, [cloudBlogs, blogsSeededInCloud]);
+  }, [serverBlogs, blogsLoadedFromServer]);
 
   const activeListingId = route.startsWith('/listing/')
     ? decodeURIComponent(route.replace('/listing/', ''))
@@ -165,76 +163,49 @@ export default function App() {
     };
   }, []);
 
-  // Subscribe to public catalog (vehicles + unloading videos + blogs) in Cloud Firestore
+  // Subscribe to public catalog (vehicles + unloading videos + blogs) via Express API + SSE
   useEffect(() => {
     const unsubscribe = subscribePublicCatalog(
       (nextVehicles) => setVehicles(nextVehicles),
       (nextVideos) => setVideos(nextVideos),
       () => setLoading(false),
-      (nextBlogs, isSeededInCloud) => {
-        setCloudBlogs(nextBlogs);
-        setBlogsSeededInCloud(isSeededInCloud);
+      (nextBlogs, isLoaded) => {
+        setServerBlogs(nextBlogs);
+        setBlogsLoadedFromServer(isLoaded);
       },
     );
     return () => unsubscribe();
   }, []);
 
-  // Listen to Firebase Auth state & resolve Cloud RBAC user profile
+  // Restore saved portal session on load (Email & Password token auth)
   useEffect(() => {
     let cancelled = false;
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (!firebaseUser) {
-        if (!cancelled) {
-          setActivePortalUser(null);
-          setBookings([]);
-          setPortalUsers(INITIAL_PORTAL_USERS);
-          setAuthLoading(false);
-        }
-        return;
-      }
-
-      setAuthLoading(true);
+    void (async () => {
       try {
-        const resolution = await resolveAuthorizedPortalUser(firebaseUser);
+        const res = await fetchCurrentPortalSession();
         if (cancelled) return;
-
-        if (!resolution.ok) {
+        if (res.user) {
+          setActivePortalUser(res.user);
+          setAuthError(null);
+        } else {
           setActivePortalUser(null);
-          setAuthError(resolution.error);
-          await signOutPortal();
-          return;
-        }
-
-        setAuthError(null);
-        setActivePortalUser(resolution.user);
-        void seedInitialCatalogIfEmpty(resolution.user, resolution.isFirstBootstrap).catch(
-          (seedErr) => console.warn('Initial catalog seed skipped:', seedErr),
-        );
-        void seedStarterBlogsOnce(resolution.user);
-      } catch (err) {
-        if (!cancelled) {
-          setActivePortalUser(null);
-          setAuthError(
-            formatPortalErrorMessage(
-              err,
-              'Could not verify portal permissions in Firestore.',
-            ),
-          );
+          if (res.errorMessage) {
+            setAuthError(res.errorMessage);
+          }
         }
       } finally {
         if (!cancelled) {
           setAuthLoading(false);
         }
       }
-    });
+    })();
 
     return () => {
       cancelled = true;
-      unsubscribe();
     };
   }, []);
 
-  // Real-time multi-user sync for current user permissions, CRM bookings, and team directory
+  // Real-time multi-user sync for active permissions, CRM leads, team directory, and draft blogs
   const activePortalUserId = activePortalUser?.id ?? null;
   useEffect(() => {
     if (!activePortalUserId || !activePortalUser) return;
@@ -256,6 +227,7 @@ export default function App() {
           const same =
             prev.id === nextUser.id &&
             prev.name === nextUser.name &&
+            prev.email === nextUser.email &&
             prev.role === nextUser.role &&
             prev.active === nextUser.active &&
             prev.permissions.inventoryRead === nextUser.permissions.inventoryRead &&
@@ -271,10 +243,14 @@ export default function App() {
       },
       onBookings: (nextBookings) => setBookings(nextBookings),
       onUsers: (nextUsers) => setPortalUsers(nextUsers),
+      onBlogs: (nextBlogs) => {
+        setServerBlogs(nextBlogs);
+        setBlogsLoadedFromServer(true);
+      },
     });
 
     return () => unsubscribe();
-    // Subscribe/rebind only when signed-in user identity changes; self-doc listener dynamically starts/stops sub-listeners
+    // Subscribe/rebind only when signed-in user identity changes
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activePortalUserId]);
 
@@ -374,16 +350,14 @@ export default function App() {
   };
 
   const handleUpdateVehicle = async (id: string, updates: Partial<ExportVehicle>) => {
-    const current = vehicles.find((v) => v.id === id);
-    const updated = await updateVehicleRecord(id, updates, current);
+    const updated = await updateVehicleRecord(id, updates);
     if (updated) {
       setVehicles((prev) => prev.map((v) => (v.id === id ? updated : v)));
     }
   };
 
   const handleUpdateVehicleStatus = async (id: string, status: VehicleStatus) => {
-    const current = vehicles.find((v) => v.id === id);
-    const updated = await updateVehicleStatusRecord(id, status, current);
+    const updated = await updateVehicleStatusRecord(id, status);
     if (updated) {
       setVehicles((prev) => prev.map((v) => (v.id === id ? updated : v)));
     }
@@ -399,9 +373,7 @@ export default function App() {
     id: string,
     updates: { status?: BookingRequest['status']; crmNotes?: string },
   ) => {
-    const current = bookings.find((b) => b.id === id);
-    const canSyncVeh = Boolean(activePortalUser?.permissions.inventoryWrite);
-    const res = await updateBookingRecord(id, updates, current, canSyncVeh);
+    const res = await updateBookingRecord(id, updates);
     if (res.booking) {
       setBookings((prev) => prev.map((b) => (b.id === id ? res.booking! : b)));
     }
@@ -430,22 +402,21 @@ export default function App() {
 
   const handleCreateBlog = async (blogInput: Omit<BlogPost, 'id' | 'createdAt'>) => {
     const created = await createBlogRecord(blogInput);
-    setBlogsSeededInCloud(true);
-    setCloudBlogs((prev) => (prev.some((b) => b.id === created.id) ? prev : [created, ...prev]));
+    setBlogsLoadedFromServer(true);
+    setServerBlogs((prev) => (prev.some((b) => b.id === created.id) ? prev : [created, ...prev]));
   };
 
   const handleUpdateBlog = async (id: string, updates: Partial<BlogPost>) => {
-    const current = cloudBlogs.find((b) => b.id === id);
-    const updated = await updateBlogRecord(id, updates, current);
+    const updated = await updateBlogRecord(id, updates);
     if (updated) {
-      setCloudBlogs((prev) => prev.map((b) => (b.id === id ? updated : b)));
+      setServerBlogs((prev) => prev.map((b) => (b.id === id ? updated : b)));
     }
   };
 
   const handleDeleteBlog = async (id: string) => {
     await deleteBlogRecord(id);
-    setBlogsSeededInCloud(true);
-    setCloudBlogs((prev) => prev.filter((b) => b.id !== id));
+    setBlogsLoadedFromServer(true);
+    setServerBlogs((prev) => prev.filter((b) => b.id !== id));
   };
 
   const handleCreateUser = async (userInput: Omit<PortalUser, 'id' | 'createdAt'>) => {
@@ -454,8 +425,7 @@ export default function App() {
   };
 
   const handleUpdateUser = async (id: string, updates: Partial<PortalUser>) => {
-    const current = portalUsers.find((u) => u.id === id);
-    const res = await updatePortalUserRecord(id, updates, current);
+    const res = await updatePortalUserRecord(id, updates);
     if (res.user) {
       setPortalUsers((prev) => {
         if (res.replacedId) {
@@ -474,27 +444,22 @@ export default function App() {
     setPortalUsers((prev) => prev.filter((u) => u.id !== id));
   };
 
+  const handlePortalLogin = async (email: string, password: string) => {
+    setAuthError(null);
+    const user = await signInPortalWithEmailPassword(email, password);
+    setActivePortalUser(user);
+  };
+
   const handleSignOut = async () => {
     await signOutPortal();
     setActivePortalUser(null);
+    setBookings([]);
+    setPortalUsers(INITIAL_PORTAL_USERS);
     setAuthError(null);
   };
 
   const handleSwitchAccount = async () => {
-    setAuthError(null);
-    try {
-      await signInPortalWithGoogle();
-    } catch (err) {
-      const code = (err as { code?: string })?.code || '';
-      if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
-        return;
-      }
-      setAuthError(
-        err instanceof Error && err.message
-          ? err.message
-          : 'Could not switch Google account. Please try again.',
-      );
-    }
+    await handleSignOut();
   };
 
   if (route === '/portal') {
@@ -504,6 +469,7 @@ export default function App() {
         authLoading={authLoading}
         authError={authError}
         onClearAuthError={() => setAuthError(null)}
+        onLogin={handlePortalLogin}
         onSignOut={handleSignOut}
         onSwitchAccount={handleSwitchAccount}
         vehicles={vehicles}

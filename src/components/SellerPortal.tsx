@@ -65,6 +65,7 @@ interface SellerPortalProps {
   authLoading: boolean;
   authError: string | null;
   onClearAuthError: () => void;
+  onLogin: (email: string, password: string) => Promise<void>;
   onSignOut: () => Promise<void>;
   onSwitchAccount: () => Promise<void>;
   vehicles: ExportVehicle[];
@@ -153,6 +154,7 @@ export function SellerPortal({
   authLoading,
   authError,
   onClearAuthError,
+  onLogin,
   onSignOut,
   onSwitchAccount,
   vehicles,
@@ -729,6 +731,7 @@ export function SellerPortal({
         authLoading={authLoading}
         authError={authError}
         onClearAuthError={onClearAuthError}
+        onLogin={onLogin}
         onExitPortal={onExitPortal}
       />
     );

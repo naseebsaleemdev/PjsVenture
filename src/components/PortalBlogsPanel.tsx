@@ -477,7 +477,7 @@ export function PortalBlogsPanel({
           <Plus className="w-4 h-4" aria-hidden="true" />
           <span>
             {saving
-              ? 'Saving to Cloud...'
+              ? 'Saving...'
               : editingId
                 ? 'Update Blog Article'
                 : status === 'Published'
@@ -496,7 +496,7 @@ export function PortalBlogsPanel({
                 Manage Export Blog Articles
               </h2>
               <p className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
-                Published posts go live on /blog and /blog/:slug immediately via Cloud Firestore.
+                Published posts go live on /blog and /blog/:slug immediately for all readers.
               </p>
             </div>
             <span className="font-mono text-xs text-slate-500 dark:text-zinc-400 tabular-nums">

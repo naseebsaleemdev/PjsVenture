@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import {
   CheckCircle2,
+  Eye,
+  EyeOff,
   Pencil,
   Plus,
   Shield,
@@ -131,6 +133,8 @@ export function PortalUsersPanel({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [role, setRole] = useState<PortalRole>('Editor');
   const [active, setActive] = useState(true);
   const [permissions, setPermissions] = useState<PortalPermissions>(
@@ -147,6 +151,8 @@ export function PortalUsersPanel({
     setEditingId(null);
     setName('');
     setEmail('');
+    setPassword('');
+    setShowPassword(false);
     setRole('Editor');
     setActive(true);
     setPermissions(createPermissionsForRole('Editor'));
@@ -157,6 +163,8 @@ export function PortalUsersPanel({
     setEditingId(user.id);
     setName(user.name);
     setEmail(user.email);
+    setPassword('');
+    setShowPassword(false);
     setRole(user.role);
     setActive(user.active);
     setPermissions({ ...user.permissions });
@@ -199,6 +207,7 @@ export function PortalUsersPanel({
 
     const trimmedName = name.trim();
     const cleanEmail = email.trim().toLowerCase();
+    const cleanPassword = password.trim();
 
     if (!trimmedName) {
       setError('Please enter the team member full name.');
@@ -206,7 +215,17 @@ export function PortalUsersPanel({
     }
 
     if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
-      setError('Please enter a valid Google / team email address (e.g. staff@gmail.com).');
+      setError('Please enter a valid team email address (e.g. staff@pjsventures.com).');
+      return;
+    }
+
+    if (!editingId && cleanPassword.length < 6) {
+      setError('Please set an initial password of at least 6 characters for this user.');
+      return;
+    }
+
+    if (editingId && cleanPassword.length > 0 && cleanPassword.length < 6) {
+      setError('New password must be at least 6 characters long (or leave blank to keep current).');
       return;
     }
 
@@ -225,16 +244,18 @@ export function PortalUsersPanel({
         await onUpdateUser(editingId, {
           name: trimmedName,
           ...(isEditingPrimaryOwner ? {} : { email: cleanEmail }),
+          ...(cleanPassword.length > 0 ? { password: cleanPassword } : {}),
           role: isEditingPrimaryOwner ? 'Admin' : role,
           active: isEditingPrimaryOwner ? true : active,
           permissions: isEditingPrimaryOwner ? createPermissionsForRole('Admin') : permissions,
         });
         resetForm();
-        setNotice(`Updated cloud permissions for ${trimmedName}.`);
+        setNotice(`Updated account & permissions for ${trimmedName}.`);
       } else {
         await onCreateUser({
           name: trimmedName,
           email: cleanEmail,
+          password: cleanPassword,
           role,
           active,
           permissions,
@@ -242,7 +263,7 @@ export function PortalUsersPanel({
         });
         resetForm();
         setNotice(
-          `Added ${trimmedName} (${cleanEmail}) as ${role}. They can now sign in at #portal using Google.`,
+          `Created ${trimmedName} (${cleanEmail}) as ${role}. They can now sign in at #portal using their email and password.`,
         );
       }
     } catch (err) {
@@ -266,7 +287,7 @@ export function PortalUsersPanel({
               {editingId ? `Edit User — ${editingUser?.name}` : 'Create Team User'}
             </h2>
             <p className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
-              Assign a role preset and customize exact module read/write access.
+              Assign login credentials, role preset, and exact module read/write access.
             </p>
           </div>
           {editingId && (
@@ -303,14 +324,14 @@ export function PortalUsersPanel({
               required
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Shehbaaz Ali"
+              placeholder="e.g. Ali Shehbaaz"
               className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-950 dark:text-zinc-100 placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus:outline-none focus:border-blue-900 dark:focus:border-blue-500"
             />
           </div>
 
           <div>
             <label className="block text-xs font-medium text-zinc-950 dark:text-zinc-200 mb-1">
-              Authorized Google / Team Email *
+              Team Login Email *
             </label>
             <input
               type="email"
@@ -318,14 +339,46 @@ export function PortalUsersPanel({
               disabled={isEditingPrimaryOwner}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="shehbaazali@gmail.com"
+              placeholder="staff@pjsventures.com"
               className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-950 dark:text-zinc-100 placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus:outline-none focus:border-blue-900 dark:focus:border-blue-500 disabled:opacity-60"
             />
             <p className="text-[11px] text-slate-500 dark:text-zinc-400 mt-1">
               {isEditingPrimaryOwner
                 ? 'Primary Owner email is permanently bound to this workspace.'
-                : 'User signs in at #portal via Google using this exact email address.'}
+                : 'User signs in at #portal using this email and password.'}
             </p>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-zinc-950 dark:text-zinc-200 mb-1">
+              {editingId ? 'Reset Password (optional)' : 'Portal Password *'}
+            </label>
+            <div className="relative">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                required={!editingId}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder={
+                  editingId
+                    ? 'Leave blank to keep existing password'
+                    : 'Minimum 6 characters'
+                }
+                className="w-full pl-3 pr-10 py-2 text-sm rounded-lg border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-950 dark:text-zinc-100 placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus:outline-none focus:border-blue-900 dark:focus:border-blue-500"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((prev) => !prev)}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-zinc-950 dark:hover:text-zinc-200 cursor-pointer"
+              >
+                {showPassword ? (
+                  <EyeOff className="w-4 h-4" aria-hidden="true" />
+                ) : (
+                  <Eye className="w-4 h-4" aria-hidden="true" />
+                )}
+              </button>
+            </div>
           </div>
         </div>
 
@@ -435,7 +488,7 @@ export function PortalUsersPanel({
           <Plus className="w-4 h-4" aria-hidden="true" />
           <span>
             {saving
-              ? 'Saving to Cloud...'
+              ? 'Saving...'
               : editingId
                 ? 'Save User & Permissions'
                 : 'Create User Account'}
@@ -451,7 +504,7 @@ export function PortalUsersPanel({
               Team Accounts &amp; Role Access
             </h2>
             <p className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
-              Synced via Cloud Firestore — each user signs in at #portal with their Google email.
+              Live team sync — each staff member signs in at #portal with their email and password.
             </p>
           </div>
           <span className="font-mono text-xs text-slate-500 dark:text-zinc-400 tabular-nums">

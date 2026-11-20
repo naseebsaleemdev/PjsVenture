@@ -1,240 +1,47 @@
-import { sendEmailVerification, type User } from 'firebase/auth';
-import {
-  collection,
-  deleteDoc,
-  doc,
-  getDoc,
-  getDocs,
-  onSnapshot,
-  serverTimestamp,
-  setDoc,
-  updateDoc,
-  writeBatch,
-  type Unsubscribe,
-} from 'firebase/firestore';
-import {
-  INITIAL_BOOKINGS,
-  INITIAL_UNLOADING_VIDEOS,
-  INITIAL_VEHICLES,
-} from '../data/seedInventory.ts';
-import { INITIAL_BLOG_POSTS } from '../data/seedBlogs.ts';
 import type {
-  BlogCategory,
   BlogPost,
-  BlogStatus,
   BookingRequest,
   ExportVehicle,
-  PortalPermissions,
   PortalUser,
   UnloadingVideo,
   VehicleStatus,
 } from '../types/autoTrade.ts';
-import {
-  OperationType,
-  auth,
-  db,
-  emailToPortalUserId,
-  handleFirestoreError,
-} from './firebase.ts';
-import {
-  INITIAL_PORTAL_USERS,
-  PRIMARY_OWNER_EMAIL,
-  ROLE_DEFAULT_PERMISSIONS,
-  normalizePortalUser,
-} from './portalRoles.ts';
+import { getPortalSessionToken, setPortalSessionToken } from './portalAuth.ts';
 
-function clampStr(val: string | undefined | null, maxLen: number): string {
-  return String(val ?? '')
-    .trim()
-    .slice(0, maxLen);
-}
-
-function toIsoString(val: unknown): string {
-  if (val && typeof (val as { toDate?: () => Date }).toDate === 'function') {
-    return (val as { toDate: () => Date }).toDate().toISOString();
+function buildAuthHeaders(includeJson = false): HeadersInit {
+  const headers: Record<string, string> = {};
+  if (includeJson) {
+    headers['Content-Type'] = 'application/json';
   }
-  if (typeof val === 'string' && val.trim().length > 0) {
-    return val;
+  const token = getPortalSessionToken();
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
   }
-  return new Date().toISOString();
+  return headers;
 }
 
-function makeDocId(prefix: string): string {
-  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`.replace(
-    /[^a-zA-Z0-9_-]/g,
-    '',
-  );
-}
-
-function sanitizePermissions(perms: PortalPermissions): PortalPermissions {
-  return {
-    inventoryRead: Boolean(perms.inventoryRead),
-    inventoryWrite: Boolean(perms.inventoryWrite),
-    inventoryDelete: Boolean(perms.inventoryDelete),
-    bookingsRead: Boolean(perms.bookingsRead),
-    bookingsWrite: Boolean(perms.bookingsWrite),
-    bookingsDelete: Boolean(perms.bookingsDelete),
-    videosManage: Boolean(perms.videosManage),
-    usersManage: Boolean(perms.usersManage),
-  };
-}
-
-function buildVehicleDocPayload(
-  id: string,
-  input: Omit<ExportVehicle, 'id' | 'createdAt'>,
-  mode: 'create' | 'update',
-) {
-  const gallery = (
-    Array.isArray(input.images) && input.images.length > 0
-      ? input.images
-      : [input.image]
-  )
-    .filter((src): src is string => typeof src === 'string' && src.trim().length > 0)
-    .slice(0, 8)
-    .map((src) => src.trim().slice(0, 350000));
-
-  const mainImage = gallery[0] || clampStr(input.image, 350000);
-  if (!mainImage) {
-    throw new Error('At least one vehicle photo is required.');
+async function apiRequest<T>(url: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(url, init);
+  const text = await res.text();
+  let parsed: Record<string, unknown> = {};
+  try {
+    parsed = text ? (JSON.parse(text) as Record<string, unknown>) : {};
+  } catch {
+    parsed = {};
   }
 
-  const dealType = input.transit.dealType === 'balance-release' ? 'balance-release' : 'direct-import';
-  const transit: Record<string, unknown> = {
-    dealType,
-    destinationPortId: clampStr(input.transit.destinationPortId, 80) || 'worldwide',
-    destinationPortLabel:
-      clampStr(input.transit.destinationPortLabel, 160) || 'Ships Worldwide · Buyer Chooses Port',
-    vesselName: clampStr(input.transit.vesselName, 160) || 'Weekly RoRo Sailing',
-    arrivalStatus: clampStr(input.transit.arrivalStatus, 200) || 'Ready to Book',
-    fullCifUsd: Math.max(0, Number(input.transit.fullCifUsd) || 0),
-    priorDepositUsd: Math.max(0, Number(input.transit.priorDepositUsd) || 0),
-    balanceDueUsd: Math.max(0, Number(input.transit.balanceDueUsd) || 0),
-    blStatus:
-      clampStr(input.transit.blStatus, 240) || 'Bill of Lading issued directly in buyer name',
-  };
-
-  if (dealType === 'balance-release') {
-    if (input.transit.trackingStage) {
-      transit.trackingStage = input.transit.trackingStage;
+  if (!res.ok) {
+    if (res.status === 401) {
+      setPortalSessionToken(null);
     }
-    if (input.transit.etaDate && input.transit.etaDate.trim()) {
-      transit.etaDate = clampStr(input.transit.etaDate, 32);
-    }
+    const errMsg =
+      typeof parsed.error === 'string' && parsed.error.trim().length > 0
+        ? parsed.error
+        : `Server returned status ${res.status}.`;
+    throw new Error(errMsg);
   }
 
-  const bodyNotes = (Array.isArray(input.inspection.bodyNotes) ? input.inspection.bodyNotes : [])
-    .map((note) => clampStr(note, 300))
-    .filter(Boolean)
-    .slice(0, 12);
-
-  const payload: Record<string, unknown> = {
-    id,
-    makeModel: clampStr(input.makeModel, 160),
-    trim: clampStr(input.trim, 160) || 'Export Grade',
-    category: input.category,
-    status: input.status,
-    year: Math.min(2035, Math.max(1980, Math.round(Number(input.year) || 2022))),
-    mileageKm: Math.max(0, Number(input.mileageKm) || 0),
-    chassisCode: clampStr(input.chassisCode, 64).toUpperCase(),
-    engine: clampStr(input.engine, 120) || 'Standard',
-    transmission: clampStr(input.transmission, 120) || 'Automatic',
-    drive: input.drive,
-    fuel: input.fuel,
-    steering: input.steering,
-    color: clampStr(input.color, 80) || 'White',
-    port: clampStr(input.port, 160) || 'Yokohama Yard',
-    fobUsd: Math.max(0, Number(input.fobUsd) || 0),
-    cbm: Math.max(1, Number(input.cbm) || 11.6),
-    image: mainImage,
-    images: gallery,
-    imageAlt:
-      clampStr(input.imageAlt, 240) ||
-      `${input.year} ${clampStr(input.makeModel, 120)}`,
-    transit,
-    inspection: {
-      auctionHouse: clampStr(input.inspection.auctionHouse, 120) || 'USS Yokohama',
-      lotNumber: clampStr(input.inspection.lotNumber, 40) || '10000',
-      overallGrade: clampStr(input.inspection.overallGrade, 20) || '4.5',
-      exteriorGrade: clampStr(input.inspection.exteriorGrade, 20) || 'B',
-      interiorGrade: clampStr(input.inspection.interiorGrade, 20) || 'A',
-      odometerVerified: Boolean(input.inspection.odometerVerified),
-      radiationCheck: clampStr(input.inspection.radiationCheck, 80) || 'Cleared · 0.05 µSv/h',
-      inspectorSummary: clampStr(input.inspection.inspectorSummary, 1500),
-      bodyNotes,
-    },
-  };
-
-  if (mode === 'create') {
-    payload.createdAt = serverTimestamp();
-  } else {
-    payload.updatedAt = serverTimestamp();
-  }
-
-  return payload;
-}
-
-function docToVehicle(raw: Record<string, unknown>, docId: string): ExportVehicle {
-  return {
-    ...(raw as unknown as ExportVehicle),
-    id: String(raw.id || docId),
-    createdAt: toIsoString(raw.createdAt),
-  };
-}
-
-function docToBooking(raw: Record<string, unknown>, docId: string): BookingRequest {
-  return {
-    ...(raw as unknown as BookingRequest),
-    id: String(raw.id || docId),
-    createdAt: toIsoString(raw.createdAt),
-  };
-}
-
-function docToVideo(raw: Record<string, unknown>, docId: string): UnloadingVideo {
-  return {
-    ...(raw as unknown as UnloadingVideo),
-    id: String(raw.id || docId),
-    createdAt: toIsoString(raw.createdAt),
-  };
-}
-
-function docToPortalUser(raw: Record<string, unknown>, docId: string): PortalUser {
-  return normalizePortalUser(
-    {
-      ...(raw as Partial<PortalUser>),
-      id: String(raw.id || docId),
-      createdAt: toIsoString(raw.createdAt),
-    },
-    (raw.role as PortalUser['role']) || 'Viewer',
-  );
-}
-
-function docToBlog(raw: Record<string, unknown>, docId: string): BlogPost {
-  const validCategories: BlogCategory[] = [
-    'Import Guides',
-    'Auction Tips',
-    'Port & Customs',
-    'Market Updates',
-  ];
-  const category = validCategories.includes(raw.category as BlogCategory)
-    ? (raw.category as BlogCategory)
-    : 'Import Guides';
-  const status: BlogStatus = raw.status === 'Draft' ? 'Draft' : 'Published';
-
-  return {
-    id: String(raw.id || docId),
-    slug: String(raw.slug || docId).toLowerCase(),
-    title: String(raw.title || 'Untitled Article'),
-    excerpt: String(raw.excerpt || ''),
-    content: String(raw.content || ''),
-    category,
-    authorName: String(raw.authorName || 'PJS Ventures Editorial'),
-    readTimeMinutes: Math.max(1, Math.min(60, Math.round(Number(raw.readTimeMinutes) || 3))),
-    coverImage: String(raw.coverImage || '/src/assets/images/yokohama_inspection_bay_1794999716476.jpg'),
-    coverImageAlt: String(raw.coverImageAlt || raw.title || 'PJS Ventures Export Article'),
-    status,
-    createdAt: toIsoString(raw.createdAt),
-    ...(raw.updatedAt ? { updatedAt: toIsoString(raw.updatedAt) } : {}),
-  };
+  return parsed as T;
 }
 
 export function slugifyBlogTitle(raw: string): string {
@@ -249,53 +56,34 @@ export function slugifyBlogTitle(raw: string): string {
   return clean || `article-${Date.now()}`;
 }
 
-function estimateReadTimeMinutes(content: string): number {
-  const words = content.trim().split(/\s+/).filter(Boolean).length;
-  return Math.min(60, Math.max(1, Math.round(words / 180)));
+export function formatPortalErrorMessage(err: unknown, fallback: string): string {
+  if (err instanceof Error && err.message) {
+    return err.message;
+  }
+  return fallback;
 }
 
-function buildBlogDocPayload(
-  id: string,
-  input: Omit<BlogPost, 'id' | 'createdAt'>,
-  mode: 'create' | 'update',
-) {
-  const cleanSlug = slugifyBlogTitle(input.slug || input.title);
-  const cleanTitle = clampStr(input.title, 180);
-  const cleanExcerpt = clampStr(input.excerpt, 400);
-  const cleanContent = clampStr(input.content, 15000);
-  const cleanCover = clampStr(input.coverImage, 350000);
-
-  if (!cleanTitle) throw new Error('Article title is required.');
-  if (!cleanExcerpt) throw new Error('Article summary / excerpt is required.');
-  if (!cleanContent) throw new Error('Article content is required.');
-  if (!cleanCover) throw new Error('A cover photo is required.');
-
-  const readMinutes = Math.min(
-    60,
-    Math.max(1, Math.round(Number(input.readTimeMinutes) || estimateReadTimeMinutes(cleanContent))),
-  );
-
-  const payload: Record<string, unknown> = {
-    id,
-    slug: cleanSlug,
-    title: cleanTitle,
-    excerpt: cleanExcerpt,
-    content: cleanContent,
-    category: input.category,
-    authorName: clampStr(input.authorName, 100) || 'PJS Ventures Editorial',
-    readTimeMinutes: readMinutes,
-    coverImage: cleanCover,
-    coverImageAlt: clampStr(input.coverImageAlt, 240) || cleanTitle,
-    status: input.status === 'Draft' ? 'Draft' : 'Published',
+export async function fetchPublicCatalogSnapshot(): Promise<{
+  vehicles: ExportVehicle[];
+  videos: UnloadingVideo[];
+  blogs: BlogPost[];
+}> {
+  const [vehRes, vidRes, blogRes] = await Promise.all([
+    apiRequest<{ vehicles: ExportVehicle[] }>('/api/vehicles', {
+      headers: buildAuthHeaders(false),
+    }),
+    apiRequest<{ videos: UnloadingVideo[] }>('/api/videos', {
+      headers: buildAuthHeaders(false),
+    }),
+    apiRequest<{ blogs: BlogPost[] }>('/api/blogs', {
+      headers: buildAuthHeaders(false),
+    }),
+  ]);
+  return {
+    vehicles: Array.isArray(vehRes.vehicles) ? vehRes.vehicles : [],
+    videos: Array.isArray(vidRes.videos) ? vidRes.videos : [],
+    blogs: Array.isArray(blogRes.blogs) ? blogRes.blogs : [],
   };
-
-  if (mode === 'create') {
-    payload.createdAt = serverTimestamp();
-  } else {
-    payload.updatedAt = serverTimestamp();
-  }
-
-  return payload;
 }
 
 export function subscribePublicCatalog(
@@ -303,323 +91,80 @@ export function subscribePublicCatalog(
   onVideos: (videos: UnloadingVideo[]) => void,
   onReady?: () => void,
   onBlogs?: (blogs: BlogPost[], isSeededInCloud: boolean) => void,
-): Unsubscribe {
-  let vehiclesReady = false;
-  let videosReady = false;
-  let blogsReady = !onBlogs;
-  let cachedBlogDocs: BlogPost[] = [];
-  let cachedFlagKnown = false;
-  let cachedFlagExists = false;
+): () => void {
+  let active = true;
 
-  const markReady = () => {
-    if (vehiclesReady && videosReady && blogsReady && onReady) {
-      onReady();
+  const refreshVehicles = async () => {
+    try {
+      const data = await apiRequest<{ vehicles: ExportVehicle[] }>('/api/vehicles', {
+        headers: buildAuthHeaders(false),
+      });
+      if (active) onVehicles(Array.isArray(data.vehicles) ? data.vehicles : []);
+    } catch {
+      // Non-fatal network blip during background refresh
     }
   };
 
-  const emitBlogs = () => {
-    if (!onBlogs || !cachedFlagKnown || !blogsReady) return;
-    const seeded = cachedFlagExists || cachedBlogDocs.length > 0;
-    onBlogs(cachedBlogDocs, seeded);
+  const refreshVideos = async () => {
+    try {
+      const data = await apiRequest<{ videos: UnloadingVideo[] }>('/api/videos', {
+        headers: buildAuthHeaders(false),
+      });
+      if (active) onVideos(Array.isArray(data.videos) ? data.videos : []);
+    } catch {
+      // Non-fatal network blip during background refresh
+    }
   };
 
-  if (onBlogs) {
-    getDoc(doc(db, 'systemFlags', 'blogsSeeded'))
-      .then((snap) => {
-        cachedFlagExists = snap.exists();
-        cachedFlagKnown = true;
-        emitBlogs();
-      })
-      .catch(() => {
-        cachedFlagExists = false;
-        cachedFlagKnown = true;
-        emitBlogs();
+  const refreshBlogs = async () => {
+    if (!onBlogs) return;
+    try {
+      const data = await apiRequest<{ blogs: BlogPost[] }>('/api/blogs', {
+        headers: buildAuthHeaders(false),
       });
+      if (active) onBlogs(Array.isArray(data.blogs) ? data.blogs : [], true);
+    } catch {
+      // Non-fatal network blip during background refresh
+    }
+  };
+
+  void Promise.all([refreshVehicles(), refreshVideos(), refreshBlogs()]).finally(() => {
+    if (active && onReady) onReady();
+  });
+
+  let eventSource: EventSource | null = null;
+  if (typeof window !== 'undefined' && typeof EventSource !== 'undefined') {
+    eventSource = new EventSource('/api/events');
+    eventSource.onmessage = (event) => {
+      if (!active) return;
+      try {
+        const msg = JSON.parse(event.data) as { type?: string; scope?: string };
+        if (msg.type !== 'sync') return;
+        if (msg.scope === 'vehicles') void refreshVehicles();
+        if (msg.scope === 'videos') void refreshVideos();
+        if (msg.scope === 'blogs') void refreshBlogs();
+      } catch {
+        // Ignore keepalive / malformed SSE payload
+      }
+    };
   }
 
-  const unsubVehicles = onSnapshot(
-    collection(db, 'vehicles'),
-    (snapshot) => {
-      vehiclesReady = true;
-      const list = snapshot.docs
-        .map((d) => docToVehicle(d.data() as Record<string, unknown>, d.id))
-        .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-      onVehicles(list);
-      markReady();
-    },
-    (error) => {
-      handleFirestoreError(error, OperationType.GET, 'vehicles');
-    },
-  );
-
-  const unsubVideos = onSnapshot(
-    collection(db, 'videos'),
-    (snapshot) => {
-      videosReady = true;
-      const list = snapshot.docs
-        .map((d) => docToVideo(d.data() as Record<string, unknown>, d.id))
-        .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-      onVideos(list);
-      markReady();
-    },
-    (error) => {
-      handleFirestoreError(error, OperationType.GET, 'videos');
-    },
-  );
-
-  const unsubBlogs = onBlogs
-    ? onSnapshot(
-        collection(db, 'blogs'),
-        (snapshot) => {
-          blogsReady = true;
-          cachedBlogDocs = snapshot.docs
-            .map((d) => docToBlog(d.data() as Record<string, unknown>, d.id))
-            .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-          emitBlogs();
-          markReady();
-        },
-        (error) => {
-          handleFirestoreError(error, OperationType.GET, 'blogs');
-        },
-      )
-    : () => {};
+  // Fallback interval sync for proxy/CDN environments that buffer SSE
+  const pollTimer = window.setInterval(() => {
+    if (!active || document.visibilityState === 'hidden') return;
+    void refreshVehicles();
+    void refreshVideos();
+    void refreshBlogs();
+  }, 15000);
 
   return () => {
-    unsubVehicles();
-    unsubVideos();
-    unsubBlogs();
+    active = false;
+    window.clearInterval(pollTimer);
+    if (eventSource) {
+      eventSource.close();
+      eventSource = null;
+    }
   };
-}
-
-export type PortalUserResolution =
-  | { ok: true; user: PortalUser; isFirstBootstrap?: boolean }
-  | { ok: false; error: string };
-
-export async function resolveAuthorizedPortalUser(
-  firebaseUser: User,
-): Promise<PortalUserResolution> {
-  const extractUserEmailAndVerification = async (targetUser: User, forceRefresh: boolean) => {
-    let claimEmail = '';
-    let claimVerified = false;
-    try {
-      const tokenResult = await targetUser.getIdTokenResult(forceRefresh);
-      if (typeof tokenResult.claims.email === 'string') {
-        claimEmail = tokenResult.claims.email.trim().toLowerCase();
-      }
-      claimVerified = tokenResult.claims.email_verified === true;
-    } catch {
-      // Ignore token claim read failure and fall back to user profile
-    }
-    const providerEmail =
-      targetUser.providerData
-        ?.find((p) => Boolean(p.email))
-        ?.email?.trim()
-        .toLowerCase() || '';
-    const resolvedEmail = targetUser.email?.trim().toLowerCase() || claimEmail || providerEmail;
-    const resolvedVerified = Boolean(targetUser.emailVerified) || claimVerified;
-    return { resolvedEmail, resolvedVerified };
-  };
-
-  let { resolvedEmail: email, resolvedVerified: isVerified } =
-    await extractUserEmailAndVerification(firebaseUser, false);
-
-  if (!email || !isVerified) {
-    try {
-      await firebaseUser.reload();
-      const refreshedUser = auth.currentUser || firebaseUser;
-      const refreshed = await extractUserEmailAndVerification(refreshedUser, true);
-      email = refreshed.resolvedEmail || email;
-      isVerified = refreshed.resolvedVerified || isVerified;
-    } catch {
-      // Ignore reload failure
-    }
-  }
-
-  if (!email) {
-    return {
-      ok: false,
-      error:
-        'Google sign-in did not provide an email address. In Firebase Console → Authentication → Settings → User account linking, ensure "Link accounts that use the same email" is enabled, then try again.',
-    };
-  }
-
-  if (!isVerified) {
-    try {
-      await sendEmailVerification(firebaseUser);
-      return {
-        ok: false,
-        error: `Email ${email} is not marked as verified yet. We sent a verification link to ${email} — open that link in your inbox, then sign in again.`,
-      };
-    } catch {
-      return {
-        ok: false,
-        error: `Email ${email} is not verified in Firebase Auth. Verify ${email} (or check User account linking in Firebase Console) and try again.`,
-      };
-    }
-  }
-
-  const userDocId = emailToPortalUserId(email);
-  const userPath = `portalUsers/${userDocId}`;
-  const userRef = doc(db, 'portalUsers', userDocId);
-
-  try {
-    const snap = await getDoc(userRef);
-    if (snap.exists()) {
-      const resolved = docToPortalUser(snap.data() as Record<string, unknown>, snap.id);
-      if (!resolved.active && !resolved.isPrimaryOwner) {
-        return {
-          ok: false,
-          error:
-            'This user account has been deactivated. Contact a Portal Admin to re-enable access.',
-        };
-      }
-      return { ok: true, user: resolved };
-    }
-
-    if (email === PRIMARY_OWNER_EMAIL) {
-      const ownerPayload = {
-        id: userDocId,
-        name: clampStr(firebaseUser.displayName || 'Owner Admin', 120) || 'Owner Admin',
-        email,
-        role: 'Admin' as const,
-        active: true,
-        permissions: { ...ROLE_DEFAULT_PERMISSIONS.Admin },
-        isPrimaryOwner: true,
-        createdAt: serverTimestamp(),
-      };
-      await setDoc(userRef, ownerPayload);
-      return {
-        ok: true,
-        isFirstBootstrap: true,
-        user: normalizePortalUser(
-          {
-            ...ownerPayload,
-            createdAt: new Date().toISOString(),
-          },
-          'Admin',
-        ),
-      };
-    }
-
-    return {
-      ok: false,
-      error: `Access restricted: ${email} is not authorized in Team & Users. Ask a Portal Admin to add this email under Team & Users.`,
-    };
-  } catch (error) {
-    handleFirestoreError(error, OperationType.GET, userPath);
-  }
-}
-
-export async function seedInitialCatalogIfEmpty(
-  user: PortalUser,
-  isFirstBootstrap = false,
-): Promise<void> {
-  if (!user.isPrimaryOwner || !isFirstBootstrap) {
-    return;
-  }
-
-  if (user.permissions.inventoryWrite) {
-    try {
-      const vehSnap = await getDocs(collection(db, 'vehicles'));
-      if (vehSnap.empty) {
-        const batch = writeBatch(db);
-        for (const v of INITIAL_VEHICLES) {
-          const { id, createdAt: _ignoreCreatedAt, ...rest } = v;
-          const cleanId = id.replace(/[^a-zA-Z0-9_-]/g, '-');
-          batch.set(
-            doc(db, 'vehicles', cleanId),
-            buildVehicleDocPayload(cleanId, rest, 'create'),
-          );
-        }
-        await batch.commit();
-      }
-    } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, 'vehicles');
-    }
-  }
-
-  if (user.permissions.videosManage) {
-    try {
-      const vidSnap = await getDocs(collection(db, 'videos'));
-      if (vidSnap.empty) {
-        const batch = writeBatch(db);
-        for (const vid of INITIAL_UNLOADING_VIDEOS) {
-          const cleanId = vid.id.replace(/[^a-zA-Z0-9_-]/g, '-');
-          batch.set(doc(db, 'videos', cleanId), {
-            id: cleanId,
-            title: clampStr(vid.title, 180),
-            portLabel: clampStr(vid.portLabel, 160),
-            containerType: clampStr(vid.containerType, 120),
-            vehicleSummary: clampStr(vid.vehicleSummary, 200),
-            videoUrl: clampStr(vid.videoUrl, 750000),
-            posterUrl: clampStr(vid.posterUrl, 350000),
-            durationLabel: clampStr(vid.durationLabel, 32),
-            createdAt: serverTimestamp(),
-          });
-        }
-        await batch.commit();
-      }
-    } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, 'videos');
-    }
-  }
-
-  if (user.permissions.bookingsWrite) {
-    try {
-      const bkSnap = await getDocs(collection(db, 'bookings'));
-      if (bkSnap.empty) {
-        const batch = writeBatch(db);
-        for (const b of INITIAL_BOOKINGS) {
-          const cleanId = b.id.replace(/[^a-zA-Z0-9_-]/g, '-');
-          batch.set(doc(db, 'bookings', cleanId), {
-            id: cleanId,
-            vehicleId: b.vehicleId,
-            vehicleTitle: clampStr(b.vehicleTitle, 200),
-            chassisCode: clampStr(b.chassisCode, 64),
-            buyerName: clampStr(b.buyerName, 120),
-            buyerEmail: clampStr(b.buyerEmail, 160),
-            buyerPhone: clampStr(b.buyerPhone, 48),
-            destinationPortId: clampStr(b.destinationPortId, 80),
-            destinationPortName: clampStr(b.destinationPortName, 160),
-            requestType: b.requestType,
-            shippingMethod: b.shippingMethod,
-            quotedAmountUsd: Math.max(0, Number(b.quotedAmountUsd) || 0),
-            notes: clampStr(b.notes, 2000),
-            leadSource: clampStr(b.leadSource || 'Website Booking Form', 120),
-            crmNotes: clampStr(b.crmNotes || '', 3000),
-            status: b.status,
-            createdAt: serverTimestamp(),
-          });
-        }
-        await batch.commit();
-      }
-    } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, 'bookings');
-    }
-  }
-}
-
-export function formatPortalErrorMessage(err: unknown, fallback: string): string {
-  if (!(err instanceof Error) || !err.message) return fallback;
-  try {
-    const parsed = JSON.parse(err.message) as {
-      error?: string;
-      operationType?: string;
-      path?: string | null;
-      authInfo?: { email?: string | null };
-    };
-    if (parsed && typeof parsed.error === 'string') {
-      if (parsed.error.toLowerCase().includes('missing or insufficient permissions')) {
-        const who = parsed.authInfo?.email ? ` for ${parsed.authInfo.email}` : '';
-        const target = parsed.path ? ` on ${parsed.path}` : '';
-        return `Permission denied${who}${target}. Confirm this account is active and has the required role permissions in Team & Users.`;
-      }
-      return parsed.error;
-    }
-  } catch {
-    // Not a JSON FirestoreErrorInfo payload
-  }
-  return err.message;
 }
 
 export function subscribePortalPrivateData(
@@ -628,704 +173,294 @@ export function subscribePortalPrivateData(
     onSelfUserChange: (nextUser: PortalUser | null, revokedMessage?: string) => void;
     onBookings: (bookings: BookingRequest[]) => void;
     onUsers: (users: PortalUser[]) => void;
+    onBlogs?: (blogs: BlogPost[]) => void;
   },
-): Unsubscribe {
+): () => void {
   let active = true;
-  let unsubBookings: Unsubscribe | null = null;
-  let unsubUsers: Unsubscribe | null = null;
+  let currentUserSnapshot = user;
 
-  const stopBookings = () => {
-    if (unsubBookings) {
-      unsubBookings();
-      unsubBookings = null;
+  const refreshSelfAndPrivate = async (scopes?: Set<string>) => {
+    if (!active) return;
+    const token = getPortalSessionToken();
+    if (!token) {
+      callbacks.onSelfUserChange(null, 'Session ended. Please sign in again.');
+      return;
     }
-  };
 
-  const stopUsers = () => {
-    if (unsubUsers) {
-      unsubUsers();
-      unsubUsers = null;
-    }
-  };
-
-  const startBookings = () => {
-    if (unsubBookings) return;
-    unsubBookings = onSnapshot(
-      collection(db, 'bookings'),
-      (snapshot) => {
-        if (!active) return;
-        const list = snapshot.docs
-          .map((d) => docToBooking(d.data() as Record<string, unknown>, d.id))
-          .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-        callbacks.onBookings(list);
-      },
-      (error) => {
-        if (!active) return;
-        handleFirestoreError(error, OperationType.GET, 'bookings');
-      },
-    );
-  };
-
-  const startUsers = () => {
-    if (unsubUsers) return;
-    unsubUsers = onSnapshot(
-      collection(db, 'portalUsers'),
-      (snapshot) => {
-        if (!active) return;
-        const list = snapshot.docs
-          .map((d) => docToPortalUser(d.data() as Record<string, unknown>, d.id))
-          .sort((a, b) => {
-            if (Boolean(a.isPrimaryOwner) !== Boolean(b.isPrimaryOwner)) {
-              return a.isPrimaryOwner ? -1 : 1;
-            }
-            return a.name.localeCompare(b.name);
-          });
-        callbacks.onUsers(list);
-      },
-      (error) => {
-        if (!active) return;
-        handleFirestoreError(error, OperationType.GET, 'portalUsers');
-      },
-    );
-  };
-
-  if (user.permissions.bookingsRead) {
-    startBookings();
-  } else {
-    callbacks.onBookings([]);
-  }
-
-  if (user.permissions.usersManage) {
-    startUsers();
-  } else {
-    callbacks.onUsers([user]);
-  }
-
-  const unsubSelf = onSnapshot(
-    doc(db, 'portalUsers', user.id),
-    (snapshot) => {
-      if (!active) return;
-      if (!snapshot.exists()) {
-        if (!user.isPrimaryOwner) {
-          stopBookings();
-          stopUsers();
+    try {
+      const meRes = await fetch('/api/auth/me', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (meRes.status === 401 || meRes.status === 403) {
+        const errPayload = await meRes.json().catch(() => ({} as { error?: string }));
+        setPortalSessionToken(null);
+        if (active) {
           callbacks.onSelfUserChange(
             null,
-            'Your portal access was removed by a Portal Admin.',
+            typeof errPayload?.error === 'string'
+              ? errPayload.error
+              : 'Your portal access changed. Please sign in again.',
           );
         }
         return;
       }
-
-      const nextUser = docToPortalUser(
-        snapshot.data() as Record<string, unknown>,
-        snapshot.id,
-      );
-
-      if (!nextUser.active && !nextUser.isPrimaryOwner) {
-        stopBookings();
-        stopUsers();
-        callbacks.onSelfUserChange(
-          null,
-          'This user account has been deactivated. Contact a Portal Admin to re-enable access.',
-        );
-        return;
+      if (meRes.ok) {
+        const meJson = (await meRes.json()) as { user?: PortalUser };
+        if (meJson.user && active) {
+          currentUserSnapshot = meJson.user;
+          callbacks.onSelfUserChange(meJson.user);
+        }
       }
+    } catch {
+      // Ignore transient network errors
+    }
 
-      if (nextUser.permissions.bookingsRead) {
-        startBookings();
+    if (!active) return;
+
+    const shouldFetchBookings = !scopes || scopes.has('bookings');
+    const shouldFetchUsers = !scopes || scopes.has('users');
+    const shouldFetchBlogs = Boolean(callbacks.onBlogs) && (!scopes || scopes.has('blogs'));
+
+    if (shouldFetchBookings) {
+      if (currentUserSnapshot.isPrimaryOwner || currentUserSnapshot.permissions.bookingsRead) {
+        try {
+          const bRes = await apiRequest<{ bookings: BookingRequest[] }>('/api/bookings', {
+            headers: buildAuthHeaders(false),
+          });
+          if (active) callbacks.onBookings(Array.isArray(bRes.bookings) ? bRes.bookings : []);
+        } catch {
+          // Ignore transient error
+        }
       } else {
-        stopBookings();
         callbacks.onBookings([]);
       }
+    }
 
-      if (nextUser.permissions.usersManage) {
-        startUsers();
+    if (shouldFetchUsers) {
+      if (currentUserSnapshot.isPrimaryOwner || currentUserSnapshot.permissions.usersManage) {
+        try {
+          const uRes = await apiRequest<{ users: PortalUser[] }>('/api/users', {
+            headers: buildAuthHeaders(false),
+          });
+          if (active) {
+            callbacks.onUsers(Array.isArray(uRes.users) ? uRes.users : [currentUserSnapshot]);
+          }
+        } catch {
+          // Ignore transient error
+        }
       } else {
-        stopUsers();
-        callbacks.onUsers([nextUser]);
+        callbacks.onUsers([currentUserSnapshot]);
       }
+    }
 
-      callbacks.onSelfUserChange(nextUser);
-    },
-    (error) => {
+    if (shouldFetchBlogs && callbacks.onBlogs) {
+      try {
+        const blogRes = await apiRequest<{ blogs: BlogPost[] }>('/api/blogs', {
+          headers: buildAuthHeaders(false),
+        });
+        if (active) callbacks.onBlogs(Array.isArray(blogRes.blogs) ? blogRes.blogs : []);
+      } catch {
+        // Ignore transient error
+      }
+    }
+  };
+
+  void refreshSelfAndPrivate();
+
+  let eventSource: EventSource | null = null;
+  if (typeof window !== 'undefined' && typeof EventSource !== 'undefined') {
+    eventSource = new EventSource('/api/events');
+    eventSource.onmessage = (event) => {
       if (!active) return;
-      handleFirestoreError(error, OperationType.GET, `portalUsers/${user.id}`);
-    },
-  );
+      try {
+        const msg = JSON.parse(event.data) as { type?: string; scope?: string };
+        if (msg.type !== 'sync' || !msg.scope) return;
+        if (msg.scope === 'bookings' || msg.scope === 'users' || msg.scope === 'blogs') {
+          void refreshSelfAndPrivate(new Set([msg.scope]));
+        }
+      } catch {
+        // Ignore non-JSON SSE messages
+      }
+    };
+  }
+
+  const pollTimer = window.setInterval(() => {
+    if (!active || document.visibilityState === 'hidden') return;
+    void refreshSelfAndPrivate();
+  }, 12000);
 
   return () => {
     active = false;
-    unsubSelf();
-    stopBookings();
-    stopUsers();
+    window.clearInterval(pollTimer);
+    if (eventSource) {
+      eventSource.close();
+      eventSource = null;
+    }
   };
-}
-
-export async function loadPortalPrivateData(user: PortalUser): Promise<{
-  bookings: BookingRequest[];
-  users: PortalUser[];
-}> {
-  let bookings: BookingRequest[] = [];
-  let users: PortalUser[] = [user];
-
-  if (user.permissions.bookingsRead) {
-    try {
-      const snap = await getDocs(collection(db, 'bookings'));
-      bookings = snap.docs
-        .map((d) => docToBooking(d.data() as Record<string, unknown>, d.id))
-        .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-    } catch (error) {
-      handleFirestoreError(error, OperationType.LIST, 'bookings');
-    }
-  }
-
-  if (user.permissions.usersManage) {
-    try {
-      const snap = await getDocs(collection(db, 'portalUsers'));
-      const fetched = snap.docs.map((d) =>
-        docToPortalUser(d.data() as Record<string, unknown>, d.id),
-      );
-      users = fetched.length > 0 ? fetched : INITIAL_PORTAL_USERS;
-    } catch (error) {
-      handleFirestoreError(error, OperationType.LIST, 'portalUsers');
-    }
-  }
-
-  return { bookings, users };
 }
 
 export async function createVehicleRecord(
   input: Omit<ExportVehicle, 'id' | 'createdAt'>,
 ): Promise<ExportVehicle> {
-  const id = makeDocId('veh');
-  const payload = buildVehicleDocPayload(id, input, 'create');
-  const path = `vehicles/${id}`;
-  try {
-    await setDoc(doc(db, 'vehicles', id), payload);
-    return {
-      ...(input as ExportVehicle),
-      id,
-      image: payload.image as string,
-      images: payload.images as string[],
-      createdAt: new Date().toISOString(),
-    };
-  } catch (error) {
-    handleFirestoreError(error, OperationType.CREATE, path);
-  }
+  const data = await apiRequest<{ vehicle: ExportVehicle }>('/api/vehicles', {
+    method: 'POST',
+    headers: buildAuthHeaders(true),
+    body: JSON.stringify(input),
+  });
+  return data.vehicle;
 }
 
 export async function updateVehicleRecord(
   id: string,
   updates: Partial<ExportVehicle>,
-  currentVehicle?: ExportVehicle,
 ): Promise<ExportVehicle | null> {
-  const path = `vehicles/${id}`;
-  try {
-    const ref = doc(db, 'vehicles', id);
-    const snap = await getDoc(ref);
-    if (!snap.exists()) {
-      throw new Error('This vehicle was deleted or is no longer available.');
-    }
-    const existing = docToVehicle(snap.data() as Record<string, unknown>, snap.id) || currentVehicle;
-
-    const mergedTransit = updates.transit
-      ? { ...existing.transit, ...updates.transit }
-      : existing.transit;
-
-    const merged: Omit<ExportVehicle, 'id' | 'createdAt'> = {
-      makeModel: updates.makeModel ?? existing.makeModel,
-      trim: updates.trim ?? existing.trim,
-      category: updates.category ?? existing.category,
-      status: updates.status ?? existing.status,
-      year: updates.year ?? existing.year,
-      mileageKm: updates.mileageKm ?? existing.mileageKm,
-      chassisCode: updates.chassisCode ?? existing.chassisCode,
-      engine: updates.engine ?? existing.engine,
-      transmission: updates.transmission ?? existing.transmission,
-      drive: updates.drive ?? existing.drive,
-      fuel: updates.fuel ?? existing.fuel,
-      steering: updates.steering ?? existing.steering,
-      color: updates.color ?? existing.color,
-      port: updates.port ?? existing.port,
-      fobUsd: updates.fobUsd ?? existing.fobUsd,
-      cbm: updates.cbm ?? existing.cbm,
-      image: updates.image ?? existing.image,
-      images: updates.images ?? existing.images,
-      imageAlt: updates.imageAlt ?? existing.imageAlt,
-      transit: mergedTransit,
-      inspection: updates.inspection
-        ? { ...existing.inspection, ...updates.inspection }
-        : existing.inspection,
-    };
-
-    const payload = buildVehicleDocPayload(id, merged, 'update');
-    await updateDoc(ref, payload);
-
-    return {
-      ...existing,
-      ...merged,
-      id,
-      image: payload.image as string,
-      images: payload.images as string[],
-      transit: payload.transit as ExportVehicle['transit'],
-      inspection: payload.inspection as ExportVehicle['inspection'],
-    };
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('no longer available')) {
-      throw error;
-    }
-    handleFirestoreError(error, OperationType.UPDATE, path);
-  }
+  const data = await apiRequest<{ vehicle: ExportVehicle }>(
+    `/api/vehicles/${encodeURIComponent(id)}`,
+    {
+      method: 'PATCH',
+      headers: buildAuthHeaders(true),
+      body: JSON.stringify(updates),
+    },
+  );
+  return data.vehicle ?? null;
 }
 
 export async function updateVehicleStatusRecord(
   id: string,
   status: VehicleStatus,
-  currentVehicle?: ExportVehicle,
 ): Promise<ExportVehicle | null> {
-  const path = `vehicles/${id}`;
-  try {
-    const ref = doc(db, 'vehicles', id);
-    await updateDoc(ref, {
-      status,
-      updatedAt: serverTimestamp(),
-    });
-    if (currentVehicle) {
-      return { ...currentVehicle, status };
-    }
-    const snap = await getDoc(ref);
-    if (!snap.exists()) return null;
-    return docToVehicle(snap.data() as Record<string, unknown>, snap.id);
-  } catch (error) {
-    handleFirestoreError(error, OperationType.UPDATE, path);
-  }
+  return updateVehicleRecord(id, { status });
 }
 
 export async function deleteVehicleRecord(id: string): Promise<void> {
-  const path = `vehicles/${id}`;
-  try {
-    await deleteDoc(doc(db, 'vehicles', id));
-  } catch (error) {
-    handleFirestoreError(error, OperationType.DELETE, path);
-  }
+  await apiRequest<{ deletedId: string }>(`/api/vehicles/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: buildAuthHeaders(false),
+  });
 }
 
 export async function createBookingRecord(
   payload: Omit<BookingRequest, 'id' | 'status' | 'createdAt'>,
 ): Promise<BookingRequest> {
-  const id = makeDocId('bk');
-  const path = `bookings/${id}`;
-  const cleanEmail = clampStr(payload.buyerEmail, 160).toLowerCase();
-  const docData = {
-    id,
-    vehicleId: payload.vehicleId ? clampStr(payload.vehicleId, 128) : null,
-    vehicleTitle: clampStr(payload.vehicleTitle, 200) || 'Custom Japan Import Request',
-    chassisCode: clampStr(payload.chassisCode, 64) || 'TBD',
-    buyerName: clampStr(payload.buyerName, 120),
-    buyerEmail: cleanEmail,
-    buyerPhone: clampStr(payload.buyerPhone, 48),
-    destinationPortId: clampStr(payload.destinationPortId, 80) || 'worldwide',
-    destinationPortName: clampStr(payload.destinationPortName, 160) || 'Buyer Selected Port',
-    requestType: payload.requestType,
-    shippingMethod: payload.shippingMethod,
-    quotedAmountUsd: Math.max(0, Number(payload.quotedAmountUsd) || 0),
-    notes: clampStr(payload.notes, 2000),
-    leadSource: clampStr(payload.leadSource || 'Website Booking Form', 120),
-    crmNotes: clampStr(payload.crmNotes || '', 3000),
-    status: 'Pending Review' as const,
-    createdAt: serverTimestamp(),
-  };
-
-  try {
-    await setDoc(doc(db, 'bookings', id), docData);
-    return {
-      ...docData,
-      createdAt: new Date().toISOString(),
-    };
-  } catch (error) {
-    handleFirestoreError(error, OperationType.CREATE, path);
-  }
+  const data = await apiRequest<{ booking: BookingRequest }>('/api/bookings', {
+    method: 'POST',
+    headers: buildAuthHeaders(true),
+    body: JSON.stringify(payload),
+  });
+  return data.booking;
 }
 
 export async function updateBookingRecord(
   id: string,
   updates: { status?: BookingRequest['status']; crmNotes?: string },
-  currentBooking?: BookingRequest,
-  canUpdateVehicleStatus = false,
-): Promise<{ booking: BookingRequest | null; syncedVehicleStatus?: { id: string; status: VehicleStatus } }> {
-  const path = `bookings/${id}`;
-  try {
-    const ref = doc(db, 'bookings', id);
-    let existing = currentBooking;
-    if (!existing) {
-      const snap = await getDoc(ref);
-      if (!snap.exists()) return { booking: null };
-      existing = docToBooking(snap.data() as Record<string, unknown>, snap.id);
-    }
-
-    const patch: Record<string, unknown> = {
-      updatedAt: serverTimestamp(),
-    };
-    if (updates.status !== undefined) {
-      patch.status = updates.status;
-    }
-    if (updates.crmNotes !== undefined) {
-      patch.crmNotes = clampStr(updates.crmNotes, 3000);
-    }
-
-    await updateDoc(ref, patch);
-
-    const updatedBooking: BookingRequest = {
-      ...existing,
-      ...(updates.status !== undefined ? { status: updates.status } : {}),
-      ...(updates.crmNotes !== undefined ? { crmNotes: clampStr(updates.crmNotes, 3000) } : {}),
-    };
-
-    let syncedVehicleStatus: { id: string; status: VehicleStatus } | undefined;
-    if (canUpdateVehicleStatus && existing.vehicleId && updates.status) {
-      const nextVehStatus: VehicleStatus | null =
-        updates.status === 'Deposit Confirmed'
-          ? 'Booked'
-          : updates.status === 'Shipped / B/L Issued'
-            ? 'In Transit'
-            : null;
-      if (nextVehStatus) {
-        try {
-          await updateVehicleStatusRecord(existing.vehicleId, nextVehStatus);
-          syncedVehicleStatus = { id: existing.vehicleId, status: nextVehStatus };
-        } catch {
-          // Non-fatal if linked vehicle was removed or caller lacks inventoryWrite
-        }
-      }
-    }
-
-    return { booking: updatedBooking, syncedVehicleStatus };
-  } catch (error) {
-    handleFirestoreError(error, OperationType.UPDATE, path);
-  }
+): Promise<{
+  booking: BookingRequest | null;
+  syncedVehicleStatus?: { id: string; status: VehicleStatus };
+}> {
+  const data = await apiRequest<{
+    booking: BookingRequest;
+    syncedVehicleStatus?: { id: string; status: VehicleStatus };
+  }>(`/api/bookings/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    headers: buildAuthHeaders(true),
+    body: JSON.stringify(updates),
+  });
+  return {
+    booking: data.booking ?? null,
+    syncedVehicleStatus: data.syncedVehicleStatus,
+  };
 }
 
 export async function deleteBookingRecord(id: string): Promise<void> {
-  const path = `bookings/${id}`;
-  try {
-    await deleteDoc(doc(db, 'bookings', id));
-  } catch (error) {
-    handleFirestoreError(error, OperationType.DELETE, path);
-  }
+  await apiRequest<{ deletedId: string }>(`/api/bookings/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: buildAuthHeaders(false),
+  });
 }
 
 export async function createVideoRecord(
   input: Omit<UnloadingVideo, 'id' | 'createdAt'>,
 ): Promise<UnloadingVideo> {
-  const id = makeDocId('vid');
-  const path = `videos/${id}`;
-  const docData = {
-    id,
-    title: clampStr(input.title, 180),
-    portLabel: clampStr(input.portLabel, 160) || 'Caribbean Port Terminal',
-    containerType: clampStr(input.containerType, 120) || '40ft Container',
-    vehicleSummary: clampStr(input.vehicleSummary, 200) || 'Japanese Export Arrival',
-    videoUrl: clampStr(input.videoUrl, 750000),
-    posterUrl: clampStr(input.posterUrl, 350000),
-    durationLabel: clampStr(input.durationLabel, 32) || '0:10',
-    createdAt: serverTimestamp(),
-  };
-
-  try {
-    await setDoc(doc(db, 'videos', id), docData);
-    return {
-      ...docData,
-      createdAt: new Date().toISOString(),
-    };
-  } catch (error) {
-    handleFirestoreError(error, OperationType.CREATE, path);
-  }
+  const data = await apiRequest<{ video: UnloadingVideo }>('/api/videos', {
+    method: 'POST',
+    headers: buildAuthHeaders(true),
+    body: JSON.stringify(input),
+  });
+  return data.video;
 }
 
 export async function deleteVideoRecord(id: string): Promise<void> {
-  const path = `videos/${id}`;
-  try {
-    await deleteDoc(doc(db, 'videos', id));
-  } catch (error) {
-    handleFirestoreError(error, OperationType.DELETE, path);
-  }
+  await apiRequest<{ deletedId: string }>(`/api/videos/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: buildAuthHeaders(false),
+  });
 }
 
 export async function createPortalUserRecord(
   input: Omit<PortalUser, 'id' | 'createdAt'>,
 ): Promise<PortalUser> {
-  const cleanEmail = clampStr(input.email, 160).toLowerCase();
-  const id = emailToPortalUserId(cleanEmail);
-  const path = `portalUsers/${id}`;
-  const userRef = doc(db, 'portalUsers', id);
-
-  try {
-    const existingSnap = await getDoc(userRef);
-    if (existingSnap.exists()) {
-      throw new Error('A user with this email already exists.');
-    }
-
-    const normalized = normalizePortalUser(
-      {
-        ...input,
-        id,
-        email: cleanEmail,
-        isPrimaryOwner: false,
-        createdAt: new Date().toISOString(),
-      },
-      input.role,
-    );
-
-    await setDoc(userRef, {
-      id,
-      name: clampStr(normalized.name, 120),
-      email: cleanEmail,
-      role: normalized.role,
-      active: Boolean(normalized.active),
-      permissions: sanitizePermissions(normalized.permissions),
-      isPrimaryOwner: false,
-      createdAt: serverTimestamp(),
-    });
-
-    return normalized;
-  } catch (error) {
-    if (error instanceof Error && error.message === 'A user with this email already exists.') {
-      throw error;
-    }
-    handleFirestoreError(error, OperationType.CREATE, path);
-  }
+  const data = await apiRequest<{ user: PortalUser }>('/api/users', {
+    method: 'POST',
+    headers: buildAuthHeaders(true),
+    body: JSON.stringify(input),
+  });
+  return data.user;
 }
 
 export async function updatePortalUserRecord(
   id: string,
   updates: Partial<PortalUser>,
-  currentUser?: PortalUser,
 ): Promise<{ user: PortalUser | null; replacedId?: string }> {
-  const path = `portalUsers/${id}`;
-  const oldRef = doc(db, 'portalUsers', id);
-
-  try {
-    let existing = currentUser;
-    if (!existing) {
-      const snap = await getDoc(oldRef);
-      if (!snap.exists()) return { user: null };
-      existing = docToPortalUser(snap.data() as Record<string, unknown>, snap.id);
-    }
-
-    const nextEmail =
-      !existing.isPrimaryOwner && updates.email
-        ? clampStr(updates.email, 160).toLowerCase()
-        : existing.email;
-
-    const normalized = normalizePortalUser(
-      {
-        ...existing,
-        ...updates,
-        email: nextEmail,
-        permissions: updates.permissions
-          ? { ...existing.permissions, ...updates.permissions }
-          : existing.permissions,
-        isPrimaryOwner: existing.isPrimaryOwner,
-      },
-      updates.role || existing.role,
-    );
-
-    const nextId = emailToPortalUserId(nextEmail);
-    if (nextId !== id && !existing.isPrimaryOwner) {
-      const newRef = doc(db, 'portalUsers', nextId);
-      const conflictSnap = await getDoc(newRef);
-      if (conflictSnap.exists()) {
-        throw new Error('Another user already uses this email.');
-      }
-
-      const batch = writeBatch(db);
-      batch.set(newRef, {
-        id: nextId,
-        name: clampStr(normalized.name, 120),
-        email: nextEmail,
-        role: normalized.role,
-        active: Boolean(normalized.active),
-        permissions: sanitizePermissions(normalized.permissions),
-        isPrimaryOwner: false,
-        createdAt: serverTimestamp(),
-      });
-      batch.delete(oldRef);
-      await batch.commit();
-      return { user: { ...normalized, id: nextId }, replacedId: id };
-    }
-
-    await updateDoc(oldRef, {
-      name: clampStr(normalized.name, 120),
-      role: existing.isPrimaryOwner ? 'Admin' : normalized.role,
-      active: existing.isPrimaryOwner ? true : Boolean(normalized.active),
-      permissions: existing.isPrimaryOwner
-        ? sanitizePermissions(ROLE_DEFAULT_PERMISSIONS.Admin)
-        : sanitizePermissions(normalized.permissions),
-      updatedAt: serverTimestamp(),
-    });
-
-    return { user: normalized };
-  } catch (error) {
-    if (error instanceof Error && error.message === 'Another user already uses this email.') {
-      throw error;
-    }
-    handleFirestoreError(error, OperationType.UPDATE, path);
-  }
+  const data = await apiRequest<{ user: PortalUser; replacedId?: string }>(
+    `/api/users/${encodeURIComponent(id)}`,
+    {
+      method: 'PATCH',
+      headers: buildAuthHeaders(true),
+      body: JSON.stringify(updates),
+    },
+  );
+  return {
+    user: data.user ?? null,
+    replacedId: data.replacedId,
+  };
 }
 
 export async function deletePortalUserRecord(id: string): Promise<void> {
-  const path = `portalUsers/${id}`;
-  try {
-    await deleteDoc(doc(db, 'portalUsers', id));
-  } catch (error) {
-    handleFirestoreError(error, OperationType.DELETE, path);
-  }
-}
-
-async function markBlogsSeededFlag(): Promise<void> {
-  try {
-    const flagRef = doc(db, 'systemFlags', 'blogsSeeded');
-    const existingFlag = await getDoc(flagRef);
-    if (!existingFlag.exists()) {
-      await setDoc(flagRef, {
-        id: 'blogsSeeded',
-        initialized: true,
-        createdAt: serverTimestamp(),
-      });
-    }
-  } catch {
-    // Non-fatal if flag already initialized
-  }
-}
-
-export async function seedStarterBlogsOnce(user: PortalUser): Promise<void> {
-  const canManageBlogs =
-    Boolean(user.isPrimaryOwner) ||
-    user.permissions.inventoryWrite ||
-    user.permissions.videosManage ||
-    user.permissions.usersManage;
-
-  if (!canManageBlogs) return;
-
-  try {
-    const flagRef = doc(db, 'systemFlags', 'blogsSeeded');
-    const flagSnap = await getDoc(flagRef);
-    if (flagSnap.exists()) return;
-
-    const existingBlogs = await getDocs(collection(db, 'blogs'));
-    const batch = writeBatch(db);
-    if (existingBlogs.empty) {
-      for (const post of INITIAL_BLOG_POSTS) {
-        const cleanId = post.id.replace(/[^a-zA-Z0-9_-]/g, '-');
-        const { id: _id, createdAt: _createdAt, updatedAt: _updatedAt, ...rest } = post;
-        batch.set(doc(db, 'blogs', cleanId), buildBlogDocPayload(cleanId, rest, 'create'));
-      }
-    }
-    batch.set(flagRef, {
-      id: 'blogsSeeded',
-      initialized: true,
-      createdAt: serverTimestamp(),
-    });
-    await batch.commit();
-  } catch (error) {
-    // Tolerate concurrent seeding races between two team members logging in simultaneously
-    try {
-      const recheckFlag = await getDoc(doc(db, 'systemFlags', 'blogsSeeded'));
-      if (recheckFlag.exists()) return;
-    } catch {
-      // Fall through to structured error log
-    }
-    console.warn('Non-fatal starter blog seed check:', error);
-  }
+  await apiRequest<{ deletedId: string }>(`/api/users/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: buildAuthHeaders(false),
+  });
 }
 
 export async function createBlogRecord(
   input: Omit<BlogPost, 'id' | 'createdAt'>,
 ): Promise<BlogPost> {
-  const id = makeDocId('blog');
-  const payload = buildBlogDocPayload(id, input, 'create');
-  const path = `blogs/${id}`;
-
-  try {
-    await setDoc(doc(db, 'blogs', id), payload);
-    await markBlogsSeededFlag();
-    return {
-      ...(input as BlogPost),
-      id,
-      slug: payload.slug as string,
-      title: payload.title as string,
-      excerpt: payload.excerpt as string,
-      content: payload.content as string,
-      authorName: payload.authorName as string,
-      readTimeMinutes: payload.readTimeMinutes as number,
-      coverImage: payload.coverImage as string,
-      coverImageAlt: payload.coverImageAlt as string,
-      status: payload.status as BlogStatus,
-      createdAt: new Date().toISOString(),
-    };
-  } catch (error) {
-    handleFirestoreError(error, OperationType.CREATE, path);
-  }
+  const data = await apiRequest<{ blog: BlogPost }>('/api/blogs', {
+    method: 'POST',
+    headers: buildAuthHeaders(true),
+    body: JSON.stringify(input),
+  });
+  return data.blog;
 }
 
 export async function updateBlogRecord(
   id: string,
   updates: Partial<BlogPost>,
-  currentPost?: BlogPost,
 ): Promise<BlogPost | null> {
-  const path = `blogs/${id}`;
-  try {
-    const ref = doc(db, 'blogs', id);
-    let existing = currentPost;
-    if (!existing) {
-      const snap = await getDoc(ref);
-      if (!snap.exists()) return null;
-      existing = docToBlog(snap.data() as Record<string, unknown>, snap.id);
-    }
-
-    const merged: Omit<BlogPost, 'id' | 'createdAt'> = {
-      slug: updates.slug ?? existing.slug,
-      title: updates.title ?? existing.title,
-      excerpt: updates.excerpt ?? existing.excerpt,
-      content: updates.content ?? existing.content,
-      category: updates.category ?? existing.category,
-      authorName: updates.authorName ?? existing.authorName,
-      readTimeMinutes: updates.readTimeMinutes ?? existing.readTimeMinutes,
-      coverImage: updates.coverImage ?? existing.coverImage,
-      coverImageAlt: updates.coverImageAlt ?? existing.coverImageAlt,
-      status: updates.status ?? existing.status,
-    };
-
-    const payload = buildBlogDocPayload(id, merged, 'update');
-    await updateDoc(ref, payload);
-
-    return {
-      ...existing,
-      ...merged,
-      id,
-      slug: payload.slug as string,
-      title: payload.title as string,
-      excerpt: payload.excerpt as string,
-      content: payload.content as string,
-      authorName: payload.authorName as string,
-      readTimeMinutes: payload.readTimeMinutes as number,
-      coverImage: payload.coverImage as string,
-      coverImageAlt: payload.coverImageAlt as string,
-      status: payload.status as BlogStatus,
-      updatedAt: new Date().toISOString(),
-    };
-  } catch (error) {
-    handleFirestoreError(error, OperationType.UPDATE, path);
-  }
+  const data = await apiRequest<{ blog: BlogPost }>(
+    `/api/blogs/${encodeURIComponent(id)}`,
+    {
+      method: 'PATCH',
+      headers: buildAuthHeaders(true),
+      body: JSON.stringify(updates),
+    },
+  );
+  return data.blog ?? null;
 }
 
 export async function deleteBlogRecord(id: string): Promise<void> {
-  const path = `blogs/${id}`;
-  try {
-    await markBlogsSeededFlag();
-    await deleteDoc(doc(db, 'blogs', id));
-  } catch (error) {
-    handleFirestoreError(error, OperationType.DELETE, path);
-  }
+  await apiRequest<{ deletedId: string }>(`/api/blogs/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: buildAuthHeaders(false),
+  });
 }

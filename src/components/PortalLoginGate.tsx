@@ -1,6 +1,5 @@
-import { useState } from 'react';
-import { ArrowLeft, Lock, Moon, ShieldCheck, Sun } from 'lucide-react';
-import { signInPortalWithGoogle } from '../lib/portalAuth.ts';
+import { useState, type FormEvent } from 'react';
+import { ArrowLeft, Eye, EyeOff, Lock, Mail, Moon, Sun } from 'lucide-react';
 
 interface PortalLoginGateProps {
   isDarkMode: boolean;
@@ -8,25 +7,8 @@ interface PortalLoginGateProps {
   authLoading: boolean;
   authError: string | null;
   onClearAuthError: () => void;
+  onLogin: (email: string, password: string) => Promise<void>;
   onExitPortal: () => void;
-}
-
-function formatGoogleSignInError(err: unknown): string {
-  const code = (err as { code?: string })?.code || '';
-  if (code === 'auth/unauthorized-domain') {
-    const host = typeof window !== 'undefined' ? window.location.hostname : 'this domain';
-    return `Domain not authorized for Google Sign-In (${host}). Add "${host}" in Firebase Console → Authentication → Settings → Authorized domains, then retry.`;
-  }
-  if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
-    return 'Google sign-in popup was closed before completion. Try again when ready.';
-  }
-  if (code === 'auth/popup-blocked') {
-    return 'Sign-in popup was blocked by your browser. Please allow popups for this site and retry.';
-  }
-  if (err instanceof Error && err.message) {
-    return err.message;
-  }
-  return 'Could not complete Google sign-in. Please try again.';
 }
 
 export function PortalLoginGate({
@@ -35,27 +17,41 @@ export function PortalLoginGate({
   authLoading,
   authError,
   onClearAuthError,
+  onLogin,
   onExitPortal,
 }: PortalLoginGateProps) {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [signingIn, setSigningIn] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
-  const [isUnauthorizedDomain, setIsUnauthorizedDomain] = useState(false);
 
   const displayedError = localError || authError;
-  const currentHost = typeof window !== 'undefined' ? window.location.hostname : '';
 
-  const handleGoogleSignIn = async () => {
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
     setLocalError(null);
-    setIsUnauthorizedDomain(false);
     onClearAuthError();
+
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      setLocalError('Please enter a valid portal email address.');
+      return;
+    }
+    if (!password) {
+      setLocalError('Please enter your portal password.');
+      return;
+    }
+
     setSigningIn(true);
     try {
-      await signInPortalWithGoogle();
+      await onLogin(cleanEmail, password);
     } catch (err) {
-      if ((err as { code?: string })?.code === 'auth/unauthorized-domain') {
-        setIsUnauthorizedDomain(true);
-      }
-      setLocalError(formatGoogleSignInError(err));
+      setLocalError(
+        err instanceof Error && err.message
+          ? err.message
+          : 'Could not sign in. Please check your email and password.',
+      );
     } finally {
       setSigningIn(false);
     }
@@ -95,8 +91,12 @@ export function PortalLoginGate({
             </button>
           </div>
 
-          <div className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl p-6 sm:p-8 shadow-xs space-y-6">
-            <div className="flex items-center gap-3.5">
+          <form
+            noValidate
+            onSubmit={handleSubmit}
+            className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl p-6 sm:p-8 shadow-xs space-y-5"
+          >
+            <div className="flex items-center gap-3.5 pb-2 border-b border-slate-100 dark:border-zinc-800">
               <div className="w-12 h-12 rounded-xl bg-slate-50 dark:bg-white border border-slate-200 dark:border-zinc-200 p-1 flex items-center justify-center shrink-0">
                 <img
                   src="/assets/aistudio/PJS_Ventures_-_Transparent__White_Theme__3ad2a367.png"
@@ -110,7 +110,7 @@ export function PortalLoginGate({
                 </h1>
                 <p className="text-xs text-slate-500 dark:text-zinc-400 flex items-center gap-1.5 mt-0.5">
                   <Lock className="w-3 h-3 shrink-0" aria-hidden="true" />
-                  <span>Authorized team &amp; owner access only</span>
+                  <span>Sign in with your team email &amp; password</span>
                 </p>
               </div>
             </div>
@@ -118,55 +118,100 @@ export function PortalLoginGate({
             {displayedError && (
               <div
                 role="alert"
-                className="text-xs text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-800 rounded-lg px-3.5 py-2.5 leading-relaxed space-y-2"
+                className="text-xs text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-800 rounded-lg px-3.5 py-2.5 leading-relaxed"
               >
-                <p>{displayedError}</p>
-                {isUnauthorizedDomain && currentHost && (
-                  <div className="pt-1 border-t border-red-200/70 dark:border-red-800/70 space-y-1.5">
-                    <div className="font-mono text-[11px] bg-white/80 dark:bg-zinc-950/80 px-2 py-1 rounded border border-red-200 dark:border-red-800 select-all break-all">
-                      {currentHost}
-                    </div>
-                    <a
-                      href="https://console.firebase.google.com/project/kingly-haven-hxq1s/authentication/settings"
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-block font-medium underline hover:opacity-80"
-                    >
-                      Open Firebase Authorized Domains Settings
-                    </a>
-                  </div>
-                )}
+                {displayedError}
               </div>
             )}
 
-            <div className="p-4 rounded-xl bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 space-y-2">
-              <div className="flex items-center gap-2 text-xs font-semibold text-zinc-950 dark:text-zinc-100">
-                <ShieldCheck className="w-4 h-4 text-blue-900 dark:text-blue-400" aria-hidden="true" />
-                <span>Cloud-Synced Team Access</span>
+            <div className="space-y-4">
+              <div>
+                <label
+                  htmlFor="portal-login-email"
+                  className="block text-xs font-medium text-zinc-950 dark:text-zinc-200 mb-1.5"
+                >
+                  Portal Email
+                </label>
+                <div className="relative">
+                  <Mail
+                    className="w-4 h-4 text-slate-400 dark:text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
+                    aria-hidden="true"
+                  />
+                  <input
+                    id="portal-login-email"
+                    type="email"
+                    autoComplete="email"
+                    required
+                    value={email}
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                      if (localError) setLocalError(null);
+                      if (authError) onClearAuthError();
+                    }}
+                    placeholder="name@pjsventures.com"
+                    className="w-full pl-9 pr-3 py-2.5 text-sm rounded-lg border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-950 dark:text-zinc-100 placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus:outline-none focus:border-blue-900 dark:focus:border-blue-500"
+                  />
+                </div>
               </div>
-              <p className="text-xs text-slate-600 dark:text-zinc-400 leading-relaxed">
-                Sign in with your authorized Google account (Owner or Admin-approved team email) to
-                manage inventory, port tracking, and CRM buyer leads across all devices.
-              </p>
+
+              <div>
+                <label
+                  htmlFor="portal-login-password"
+                  className="block text-xs font-medium text-zinc-950 dark:text-zinc-200 mb-1.5"
+                >
+                  Password
+                </label>
+                <div className="relative">
+                  <Lock
+                    className="w-4 h-4 text-slate-400 dark:text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
+                    aria-hidden="true"
+                  />
+                  <input
+                    id="portal-login-password"
+                    type={showPassword ? 'text' : 'password'}
+                    autoComplete="current-password"
+                    required
+                    value={password}
+                    onChange={(e) => {
+                      setPassword(e.target.value);
+                      if (localError) setLocalError(null);
+                      if (authError) onClearAuthError();
+                    }}
+                    placeholder="Enter your password"
+                    className="w-full pl-9 pr-10 py-2.5 text-sm rounded-lg border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-950 dark:text-zinc-100 placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus:outline-none focus:border-blue-900 dark:focus:border-blue-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((prev) => !prev)}
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-zinc-950 dark:hover:text-zinc-200 cursor-pointer"
+                  >
+                    {showPassword ? (
+                      <EyeOff className="w-4 h-4" aria-hidden="true" />
+                    ) : (
+                      <Eye className="w-4 h-4" aria-hidden="true" />
+                    )}
+                  </button>
+                </div>
+              </div>
             </div>
 
             <button
-              type="button"
+              type="submit"
               disabled={signingIn || authLoading}
-              onClick={handleGoogleSignIn}
-              className="w-full inline-flex items-center justify-center gap-3 px-5 py-3 text-sm font-medium text-white bg-blue-900 hover:bg-blue-950 dark:bg-blue-600 dark:hover:bg-blue-500 disabled:bg-slate-400 dark:disabled:bg-zinc-700 rounded-lg transition-colors cursor-pointer"
+              className="w-full inline-flex items-center justify-center gap-2 px-5 py-3 text-sm font-medium text-white bg-blue-900 hover:bg-blue-950 dark:bg-blue-600 dark:hover:bg-blue-500 disabled:bg-slate-400 dark:disabled:bg-zinc-700 rounded-lg transition-colors cursor-pointer"
             >
-              <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" aria-hidden="true">
-                <path
-                  fill="currentColor"
-                  d="M21.35 11.1h-9.17v2.73h6.51c-.33 3.81-3.5 5.44-6.5 5.44C8.36 19.27 5 16.25 5 12c0-4.1 3.2-7.27 7.2-7.27c3.09 0 4.9 1.97 4.9 1.97L19 4.72S16.56 2 12.1 2C6.42 2 2.03 6.8 2.03 12c0 5.05 4.13 10 10.22 10c5.35 0 9.25-3.67 9.25-9.09c0-1.15-.15-1.81-.15-1.81"
-                />
-              </svg>
+              <Lock className="w-4 h-4 shrink-0" aria-hidden="true" />
               <span>
-                {signingIn || authLoading ? 'Verifying Access...' : 'Continue with Google'}
+                {signingIn || authLoading ? 'Signing In...' : 'Sign In to Seller Portal'}
               </span>
             </button>
-          </div>
+
+            <p className="text-[11px] text-center text-slate-500 dark:text-zinc-400 leading-relaxed">
+              Multiple team members can sign in simultaneously on separate devices or browsers using
+              their assigned email and password.
+            </p>
+          </form>
         </div>
       </div>
     </div>
