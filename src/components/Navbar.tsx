@@ -5,10 +5,13 @@ export type AppRoute =
   | '/'
   | '/inventory'
   | '/port-deals'
+  | '/auctions'
   | '/markets'
   | '/ports'
   | '/calculator'
   | '/how-to-buy'
+  | '/company'
+  | '/faq'
   | '/blog'
   | '/book'
   | '/portal'
@@ -23,6 +26,7 @@ interface NavbarProps {
 const NAV_ITEMS: { label: string; route: AppRoute }[] = [
   { label: 'Inventory', route: '/inventory' },
   { label: 'Port Deals', route: '/port-deals' },
+  { label: 'Auctions', route: '/auctions' },
   { label: 'Global Ports', route: '/ports' },
   { label: 'CIF Calculator', route: '/calculator' },
   { label: 'How to Buy', route: '/how-to-buy' },

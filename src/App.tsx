@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { AuctionsPage } from './components/AuctionsPage';
 import { BlogListPage } from './components/BlogListPage';
 import { BlogPostPage } from './components/BlogPostPage';
 import { CifCalculatorSection, type LockedCifQuote } from './components/CifCalculatorSection';
+import { CompanyProfilePage } from './components/CompanyProfilePage';
+import { FaqPage } from './components/FaqPage';
 import { Footer } from './components/Footer';
 import { GlobalMarketsPage } from './components/GlobalMarketsPage';
 import { HomePage } from './components/HomePage';
@@ -58,10 +61,13 @@ const STATIC_ROUTES: AppRoute[] = [
   '/',
   '/inventory',
   '/port-deals',
+  '/auctions',
   '/markets',
   '/ports',
   '/calculator',
   '/how-to-buy',
+  '/company',
+  '/faq',
   '/blog',
   '/book',
   '/portal',
@@ -71,10 +77,13 @@ const ROUTE_TITLES: Record<string, string> = {
   '/': 'PJS Ventures — Global Japanese Auto Exports & Port Balance Deals',
   '/inventory': 'Global Export Inventory — PJS Ventures',
   '/port-deals': 'Port Balance-Release Deals — PJS Ventures',
+  '/auctions': 'Japanese Live Auto Auctions & Weekly Schedule — PJS Ventures',
   '/markets': 'Global Export Markets — PJS Ventures',
   '/ports': 'Global Destination Ports — PJS Ventures',
   '/calculator': 'Global Freight & CIF Landed Calculator — PJS Ventures',
   '/how-to-buy': 'How to Buy & Export Guide — PJS Ventures',
+  '/company': 'Company Profile, Export Yards & Bank Wire Policy — PJS Ventures',
+  '/faq': 'Buyer FAQ & Export Help Center — PJS Ventures',
   '/blog': 'Export Journal & Buyer Guides — PJS Ventures Blog',
   '/book': 'Book a Vehicle or Claim Port Balance — PJS Ventures',
   '/portal': 'Seller Portal — PJS Ventures',
@@ -621,8 +630,20 @@ export default function App() {
           />
         )}
 
+        {route === '/auctions' && (
+          <AuctionsPage onNavigate={navigate} />
+        )}
+
         {route === '/how-to-buy' && (
           <HowToBuyPage onNavigate={navigate} />
+        )}
+
+        {route === '/company' && (
+          <CompanyProfilePage onNavigate={navigate} />
+        )}
+
+        {route === '/faq' && (
+          <FaqPage onNavigate={navigate} />
         )}
 
         {route === '/blog' && (

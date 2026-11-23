@@ -145,10 +145,19 @@ export function Footer({ onNavigate, onSelectInventoryCategory }: FooterProps) {
               <li>
                 <button
                   type="button"
+                  onClick={() => onNavigate('/auctions')}
+                  className="hover:text-white transition-colors cursor-pointer"
+                >
+                  Japan Live Auctions
+                </button>
+              </li>
+              <li>
+                <button
+                  type="button"
                   onClick={() => onNavigate('/how-to-buy')}
                   className="hover:text-white transition-colors cursor-pointer"
                 >
-                  Auction Inspection &amp; Buying Guide
+                  Auction Inspection &amp; Guide
                 </button>
               </li>
             </ul>
@@ -160,6 +169,24 @@ export function Footer({ onNavigate, onSelectInventoryCategory }: FooterProps) {
               Buyer Desk
             </h3>
             <ul className="space-y-2 text-xs">
+              <li>
+                <button
+                  type="button"
+                  onClick={() => onNavigate('/company')}
+                  className="hover:text-white transition-colors cursor-pointer"
+                >
+                  About &amp; Bank Security
+                </button>
+              </li>
+              <li>
+                <button
+                  type="button"
+                  onClick={() => onNavigate('/faq')}
+                  className="hover:text-white transition-colors cursor-pointer"
+                >
+                  Buyer FAQ &amp; Help
+                </button>
+              </li>
               <li>
                 <button
                   type="button"

@@ -152,10 +152,24 @@ export function HowToBuyPage({ onNavigate }: HowToBuyPageProps) {
           <div className="flex flex-wrap items-center gap-3">
             <button
               type="button"
-              onClick={() => onNavigate('/calculator')}
-              className="px-5 py-2.5 text-sm font-medium text-zinc-950 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer"
+              onClick={() => onNavigate('/auctions')}
+              className="px-4 py-2.5 text-sm font-medium text-[#0B1F3A] bg-white border border-slate-200 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
             >
-              Open Freight Calculator
+              Japan Live Auctions
+            </button>
+            <button
+              type="button"
+              onClick={() => onNavigate('/faq')}
+              className="px-4 py-2.5 text-sm font-medium text-[#0B1F3A] bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer"
+            >
+              Buyer FAQ
+            </button>
+            <button
+              type="button"
+              onClick={() => onNavigate('/calculator')}
+              className="px-4 py-2.5 text-sm font-medium text-[#0B1F3A] bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer"
+            >
+              CIF Calculator
             </button>
             <button
               type="button"
